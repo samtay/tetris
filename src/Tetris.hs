@@ -12,19 +12,11 @@ import Lens.Micro.TH
 import Prelude hiding (Left, Right)
 
 -- | Tetris shape types
-data Tetrimino =
-    I
-  | O
-  | T
-  | S
-  | Z
-  | J
-  | L
+data Tetrimino = I | O | T | S | Z | J | L
   deriving (Eq, Show, Enum)
 
 -- | Coordinates
 type Coord = (Int, Int)
-type CoordMap = (Int -> Int, Int -> Int)
 
 -- | Tetris shape in coordinate context
 data Block = Block
@@ -81,7 +73,20 @@ initT = Block T (0,0) [(-1,0), (0,-1), (1,0)]
 -- *Note*: Strict unsafe rotation not respecting boundaries
 -- Safety can only be assured within Game context
 rotate' :: Block -> Block
-rotate' = (& extra %~ fmap (\(x,y) -> (-y, x)))
+rotate' b@(Block s o cs)
+  | s == O = b -- O doesn't need rotation
+  | s == I && (-2,0) `elem` cs = rotateBy counterclockwise
+  | s == I = rotateBy clockwise
+rotate' = (& extra %~ fmap counterclockwise)
+
+rotateBy :: (Coord -> Coord) -> Block -> Block
+rotateBy dir = (& extra %~ fmap dir)
+
+clockwise :: Coord -> Coord
+clockwise (x, y) = (y, -x)
+
+counterclockwise :: Coord -> Coord
+counterclockwise (x, y) = (-y, x)
 
 -- | Get absolute coordinates of extraneous block cells
 absExtra :: Block -> [Coord]
@@ -89,4 +94,6 @@ absExtra (Block _ (xo,yo) cs) = fmap (\(x,y) -> (x+xo, y+yo)) cs
 
 -- | Get absolute coordinates of all block cells
 absAll :: Block -> [Coord]
-absAll (Block _ o@(xo,yo) cs) = o : fmap (\(x,y) -> (x+xo, y+yo)) cs
+absAll b = b ^. origin : absExtra b
+
+-- | TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
