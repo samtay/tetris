@@ -18,9 +18,10 @@ library
   exposed-modules:     Tetris
   build-depends:       base >= 4.7 && < 5
                      , brick
-                     , containers
+                     , containers == 0.5.10.2
                      , microlens
                      , microlens-th
+                     , random
   default-language:    Haskell2010
 
 executable tetris

@@ -2,35 +2,32 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Tetris
-    (
-    ) where
+module Tetris where
 
+import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Sequence (ViewL(..), (<|), (><))
+import qualified Data.Sequence as Seq
 import Lens.Micro
 import Lens.Micro.TH
+import System.Random (getStdRandom, randomR)
+
 import Prelude hiding (Left, Right)
 
+-- Types and instances
+
 -- | Tetris shape types
-data Tetrimino =
-    I
-  | O
-  | T
-  | S
-  | Z
-  | J
-  | L
+data Tetrimino = I | O | T | S | Z | J | L
   deriving (Eq, Show, Enum)
 
 -- | Coordinates
 type Coord = (Int, Int)
-type CoordMap = (Int -> Int, Int -> Int)
 
 -- | Tetris shape in coordinate context
 data Block = Block
   { _shape  :: Tetrimino -- ^ block type
-  , _origin :: Coord -- ^ origin (absolute)
-  , _extra  :: [Coord] -- ^ extraneous cells (relative)
+  , _origin :: Coord -- ^ origin
+  , _extra  :: [Coord] -- ^ extraneous cells
   } deriving (Eq, Show)
 
 makeLenses ''Block
@@ -43,13 +40,14 @@ data Cell = Filled Tetrimino | Empty
   deriving (Eq, Show)
 
 -- | Board of cells
-type Board = M.Map Coord Cell
+type Board = Map Coord Cell
 
 -- | Game state
 data Game = Game
-  { _speed :: Int
+  { _level :: Int
   , _currBlock :: Block
   , _nextShape :: Tetrimino
+  , _nextShapeBag :: Seq.Seq Tetrimino
   , _score :: Int
   , _board :: Board
   } deriving (Eq, Show)
@@ -66,27 +64,84 @@ instance Translatable Coord where
   translate Down (x,y) = (x, y-1)
 
 instance Translatable Block where
-  translate d b = b & origin %~ translate d
+  translate d b =
+    b & origin %~ translate d
+      & extra %~ fmap (translate d)
 
-initI, initO, initS, initZ, initL, initJ, initT :: Block
-initI = Block I (0,0) [(-2,0), (-1,0), (1,0)]
-initO = Block O (0,0) [(-1,0), (-1,-1), (0,-1)]
-initS = Block S (0,0) [(-1,-1), (0,-1), (1,0)]
-initZ = Block Z (0,0) [(-1,0), (0,-1), (1,-1)]
-initL = Block L (0,0) [(-1,-1), (-1,0), (1,0)]
-initJ = Block J (0,0) [(-1,0), (1,0), (1,-1)]
-initT = Block T (0,0) [(-1,0), (0,-1), (1,0)]
+-- Low level functions on blocks, cells, and coordinates
+
+initBlock :: Tetrimino -> Block
+initBlock I = Block I startOrigin [(-2,0), (-1,0), (1,0)]
+initBlock O = Block O startOrigin [(-1,0), (-1,-1), (0,-1)]
+initBlock S = Block S startOrigin [(-1,-1), (0,-1), (1,0)]
+initBlock Z = Block Z startOrigin [(-1,0), (0,-1), (1,-1)]
+initBlock L = Block L startOrigin [(-1,-1), (-1,0), (1,0)]
+initBlock J = Block J startOrigin [(-1,0), (1,0), (1,-1)]
+initBlock T = Block T startOrigin [(-1,0), (0,-1), (1,0)]
+
+-- | Visible, active board size
+boardWidth, boardHeight :: Int
+boardWidth = 10
+boardHeight = 20
+
+-- | Starting block origin cell
+startOrigin :: Coord
+startOrigin = (6, 21)
 
 -- | Rotate block counter clockwise about origin
 -- *Note*: Strict unsafe rotation not respecting boundaries
 -- Safety can only be assured within Game context
 rotate' :: Block -> Block
-rotate' = (& extra %~ fmap (\(x,y) -> (-y, x)))
+rotate' b@(Block s o@(xo,yo) cs)
+  | s == O = b -- O doesn't need rotation
+  | s == I && (xo,yo+1) `elem` cs = rotateWith clockwise b -- I only has two orientations
+  | otherwise = rotateWith counterclockwise b
 
--- | Get absolute coordinates of extraneous block cells
-absExtra :: Block -> [Coord]
-absExtra (Block _ (xo,yo) cs) = fmap (\(x,y) -> (x+xo, y+yo)) cs
+rotateWith :: (Coord -> Coord -> Coord) -> Block -> Block
+rotateWith dir b = let o = b ^. origin
+                    in b & extra %~ fmap (dir o)
 
--- | Get absolute coordinates of all block cells
-absAll :: Block -> [Coord]
-absAll (Block _ o@(xo,yo) cs) = o : fmap (\(x,y) -> (x+xo, y+yo)) cs
+clockwise :: Coord -- ^ origin
+          -> Coord -- ^ point to rotate around origin
+          -> Coord
+clockwise (xo, yo) (x, y) = (xo + y - yo, xo + y - x)
+
+counterclockwise :: Coord -- ^ origin
+                 -> Coord -- ^ point to rotate around origin
+                 -> Coord
+counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
+
+-- | Get coordinates of all block cells
+occupiedCells :: Block -> [Coord]
+occupiedCells b = b ^. origin : b ^. extra
+
+-- Higher level functions on game and board
+
+bagFourTetriminoEach :: IO (Seq.Seq Tetrimino)
+bagFourTetriminoEach =
+  shuffle $ Seq.cycleTaking 28 $ Seq.fromList [(I)..]
+
+-- | Initialize a game with a given level
+initGame :: Int ->  IO Game
+initGame lvl = do
+  initBag <- bagFourTetriminoEach
+  let (fstShape :< fstBag) = Seq.viewl initBag
+      (sndShape :< sndBag) = Seq.viewl fstBag
+  return
+    Game { _level = lvl
+         , _currBlock = initBlock fstShape
+         , _nextShape = sndShape
+         , _nextShapeBag = sndBag
+         , _score = 0
+         , _board = mempty }
+
+-- | TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
+
+shuffle :: Seq.Seq a -> IO (Seq.Seq a)
+shuffle xs
+  | null xs   = mempty
+  | otherwise = do
+      randomPosition <- getStdRandom (randomR (0, length xs - 1))
+      let (left, right) = Seq.splitAt randomPosition xs
+          (y :< ys)     = Seq.viewl right
+      fmap (y <|) (shuffle $ left >< ys)
