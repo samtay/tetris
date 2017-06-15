@@ -23,7 +23,7 @@ data Tetrimino = I | O | T | S | Z | J | L
 -- | Coordinates
 type Coord = (Int, Int)
 
--- | Tetris shape in coordinate context
+-- | Tetris shape in location context
 data Block = Block
   { _shape  :: Tetrimino -- ^ block type
   , _origin :: Coord -- ^ origin
@@ -35,12 +35,11 @@ makeLenses ''Block
 data Direction = Left | Right | Down
   deriving (Eq, Show)
 
--- | Cell state within a tetris board
-data Cell = Filled Tetrimino | Empty
-  deriving (Eq, Show)
-
--- | Board of cells
-type Board = Map Coord Cell
+-- | Board
+--
+-- If coordinate not present in map, yet in bounds, then it is empty,
+-- otherwise its value is the type of tetrimino occupying it.
+type Board = Map Coord Tetrimino
 
 -- | Game state
 data Game = Game
@@ -54,9 +53,8 @@ data Game = Game
 
 makeLenses ''Game
 
-
 -- Translate class for direct translations, without concern for boundaries
--- Shiftable concerns safe translations with boundaries
+-- 'shift' concerns safe translations with boundaries
 class Translatable s where
   translate :: Direction -> s -> s
 
@@ -70,7 +68,7 @@ instance Translatable Block where
     b & origin %~ translate d
       & extra %~ fmap (translate d)
 
--- Low level functions on blocks, cells, and coordinates
+-- Low level functions on blocks and coordinates
 
 initBlock :: Tetrimino -> Block
 initBlock I = Block I startOrigin [(-2,0), (-1,0), (1,0)]
@@ -86,7 +84,7 @@ boardWidth, boardHeight :: Int
 boardWidth = 10
 boardHeight = 20
 
--- | Starting block origin cell
+-- | Starting block origin
 startOrigin :: Coord
 startOrigin = (6, 22)
 
@@ -112,9 +110,9 @@ rotate' b@(Block s o@(xo,yo) cs)
                      -> Coord
     counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
 
--- | Get coordinates of all block cells
-occupiedCells :: Block -> [Coord]
-occupiedCells b = b ^. origin : b ^. extra
+-- | Get coordinates of entire block
+blockCoords :: Block -> [Coord]
+blockCoords b = b ^. origin : b ^. extra
 
 -- Higher level functions on game and board
 
