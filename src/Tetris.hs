@@ -116,21 +116,26 @@ blockCoords b = b ^. origin : b ^. extra
 
 -- Higher level functions on game and board
 
-bagFourTetriminoEach :: IO (Seq.Seq Tetrimino)
-bagFourTetriminoEach =
-  shuffle $ Seq.cycleTaking 28 $ Seq.fromList [(I)..]
+-- | Facilitates cycling through at least 4 occurences of each shape
+-- before next bag (random permutation of 4*each tetrimino) is created. If input is empty,
+-- generates new bag, otherwise just unshifts the first value and returns pair.
+bagFourTetriminoEach :: Seq.Seq Tetrimino -> IO (Tetrimino, Seq.Seq Tetrimino)
+bagFourTetriminoEach = go . Seq.viewl
+  where
+    go (t :< ts) = return (t, ts)
+    go EmptyL = freshList >>= bagFourTetriminoEach
+    freshList = shuffle $ Seq.cycleTaking 28 $ Seq.fromList [(I)..]
 
 -- | Initialize a game with a given level
 initGame :: Int ->  IO Game
 initGame lvl = do
-  initBag <- bagFourTetriminoEach
-  let (fstShape :< fstBag) = Seq.viewl initBag
-      (sndShape :< sndBag) = Seq.viewl fstBag
-  return
+  (s1, bag1) <- bagFourTetriminoEach Seq.empty
+  (s2, bag2) <- bagFourTetriminoEach bag1
+  return $
     Game { _level = lvl
-         , _currBlock = initBlock fstShape
-         , _nextShape = sndShape
-         , _nextShapeBag = sndBag
+         , _currBlock = initBlock s1
+         , _nextShape = s2
+         , _nextShapeBag = bag2
          , _score = 0
          , _board = mempty }
 
@@ -147,16 +152,28 @@ clearFullRows g = g & board %~ clearBoard
            in (x, y - offset)
 
 -- | Handle counterclockwise block rotation (if possible)
+-- TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
 rotate :: Game -> Game
 rotate = undefined
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
-isStopped = undefined
+isStopped b = any (`M.member` b) . map (translate Down) . blockCoords
 
--- | If stopped, freeze current block to board and get next block
-cycleNextBlock :: Game -> IO Game
-cycleNextBlock = undefined
+-- | Freeze current block
+freezeBlock :: Game -> Game
+freezeBlock g = g & board %~ (M.union blkMap)
+  where blk    = g ^. currBlock
+        blkMap = M.fromList $ zip (blk ^. to blockCoords) (repeat $ blk ^. shape)
+
+-- | Replace currBlock with next block
+nextBlock :: Game -> IO Game
+nextBlock g = do
+  (t, ts) <- bagFourTetriminoEach (g ^. nextShapeBag)
+  return $
+    g & currBlock    .~ initBlock (g ^. nextShape)
+      & nextShape    .~ t
+      & nextShapeBag .~ ts
 
 -- | Try to shift current block; if shifting not possible, leave block where it is
 shift :: Direction -> Game -> Game
@@ -165,23 +182,24 @@ shift d g = g & currBlock %~ shiftBlock
                           then translate d b
                           else b
 
--- | Check if coordinate is already occupied in board
-isOccupied :: Board -> Coord -> Bool
-isOccupied = undefined
+-- | Check if coordinate is already occupied or free in board
+isFree, isOccupied :: Board -> Coord -> Bool
+isFree     = flip M.notMember
+isOccupied = flip M.member
 
--- | Check if coordinate is out of bounds
-isOutOfBounds :: Coord -> Bool
-isOutOfBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..boardHeight]
+-- | Check if coordinate is in or out of bounds
+isInBounds, isOutOfBounds :: Coord -> Bool
+isInBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..boardHeight]
+isOutOfBounds = not . isInBounds
 
 -- | Gravitate current block, i.e. shift down
 gravitate :: Game -> Game
 gravitate = shift Down
 
--- | Checks if block's potential new origin is valid
+-- | Checks if block's potential new location is valid
 isValidBlockPosition :: Block -> Board -> Bool
-isValidBlockPosition = undefined
-
--- TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
+isValidBlockPosition blk brd = all validCoord $ blk ^. to blockCoords
+  where validCoord = (&&) <$> isFree brd <*> isInBounds
 
 -- | Shuffle a sequence (random permutation)
 shuffle :: Seq.Seq a -> IO (Seq.Seq a)
