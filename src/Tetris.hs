@@ -98,20 +98,19 @@ rotate' b@(Block s o@(xo,yo) cs)
   | s == O = b -- O doesn't need rotation
   | s == I && (xo,yo+1) `elem` cs = rotateWith clockwise b -- I only has two orientations
   | otherwise = rotateWith counterclockwise b
+  where
+    rotateWith :: (Coord -> Coord -> Coord) -> Block -> Block
+    rotateWith dir b = b & extra %~ fmap (dir (b ^. origin))
 
-rotateWith :: (Coord -> Coord -> Coord) -> Block -> Block
-rotateWith dir b = let o = b ^. origin
-                    in b & extra %~ fmap (dir o)
+    clockwise :: Coord -- ^ origin
+              -> Coord -- ^ point to rotate around origin
+              -> Coord
+    clockwise (xo, yo) (x, y) = (xo + y - yo, xo + y - x)
 
-clockwise :: Coord -- ^ origin
-          -> Coord -- ^ point to rotate around origin
-          -> Coord
-clockwise (xo, yo) (x, y) = (xo + y - yo, xo + y - x)
-
-counterclockwise :: Coord -- ^ origin
-                 -> Coord -- ^ point to rotate around origin
-                 -> Coord
-counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
+    counterclockwise :: Coord -- ^ origin
+                     -> Coord -- ^ point to rotate around origin
+                     -> Coord
+    counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
 
 -- | Get coordinates of all block cells
 occupiedCells :: Block -> [Coord]
