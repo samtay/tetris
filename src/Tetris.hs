@@ -52,6 +52,8 @@ data Game = Game
   , _board :: Board
   } deriving (Eq, Show)
 
+makeLenses ''Game
+
 
 -- Translate class for direct translations, without concern for boundaries
 -- Shiftable concerns safe translations with boundaries
@@ -135,7 +137,19 @@ initGame lvl = do
          , _score = 0
          , _board = mempty }
 
--- | TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
+-- TODO check if mapKeysMonotonic works
+clearFullRows :: Game -> Game
+clearFullRows g = g & board %~ clearBoard
+  where clearBoard           = M.mapKeys shiftRowsAbove . M.filterWithKey isInFullRow
+        isInFullRow (_,y) _  = y `elem` fullRowIndices
+        fullRowIndices       = filter isFullRow [1..boardHeight]
+        isFullRow r          = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
+        inRow r (_, y) _     = r == y
+        shiftRowsAbove (x,y) =
+          let offset = length . filter (< y) $ fullRowIndices
+           in (x, y - offset)
+
+-- TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
 
 shuffle :: Seq.Seq a -> IO (Seq.Seq a)
 shuffle xs
