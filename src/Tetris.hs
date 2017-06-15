@@ -88,7 +88,7 @@ boardHeight = 20
 
 -- | Starting block origin cell
 startOrigin :: Coord
-startOrigin = (6, 21)
+startOrigin = (6, 22)
 
 -- | Rotate block counter clockwise about origin
 -- *Note*: Strict unsafe rotation not respecting boundaries
@@ -148,8 +148,44 @@ clearFullRows g = g & board %~ clearBoard
           let offset = length . filter (< y) $ fullRowIndices
            in (x, y - offset)
 
+-- | Handle counterclockwise block rotation (if possible)
+rotate :: Game -> Game
+rotate = undefined
+
+-- | Check if a block on a board is stopped from further gravitation
+isStopped :: Board -> Block -> Bool
+isStopped = undefined
+
+-- | If stopped, freeze current block to board and get next block
+cycleNextBlock :: Game -> IO Game
+cycleNextBlock = undefined
+
+-- | Try to shift current block; if shifting not possible, leave block where it is
+shift :: Direction -> Game -> Game
+shift d g = g & currBlock %~ shiftBlock
+  where shiftBlock b = if isValidBlockPosition (translate d b) (g ^. board)
+                          then translate d b
+                          else b
+
+-- | Check if coordinate is already occupied in board
+isOccupied :: Board -> Coord -> Bool
+isOccupied = undefined
+
+-- | Check if coordinate is out of bounds
+isOutOfBounds :: Coord -> Bool
+isOutOfBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..boardHeight]
+
+-- | Gravitate current block, i.e. shift down
+gravitate :: Game -> Game
+gravitate = shift Down
+
+-- | Checks if block's potential new origin is valid
+isValidBlockPosition :: Block -> Board -> Bool
+isValidBlockPosition = undefined
+
 -- TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
 
+-- | Shuffle a sequence (random permutation)
 shuffle :: Seq.Seq a -> IO (Seq.Seq a)
 shuffle xs
   | null xs   = mempty
