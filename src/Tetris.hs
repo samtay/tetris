@@ -46,7 +46,7 @@ type Board = Map Coord Tetrimino
 -- | Game state
 data Game = Game
   { _level :: Int
-  , _currBlock :: Block
+  , _block :: Block
   , _nextShape :: Tetrimino
   , _nextShapeBag :: Seq.Seq Tetrimino
   , _rowClears :: Seq.Seq Int
@@ -136,7 +136,7 @@ initGame lvl = do
   (s2, bag2) <- bagFourTetriminoEach bag1
   return $
     Game { _level = lvl
-         , _currBlock = initBlock s1
+         , _block = initBlock s1
          , _nextShape = s2
          , _nextShapeBag = bag2
          , _score = 0
@@ -144,10 +144,10 @@ initGame lvl = do
          , _board = mempty }
 
 isGameOver :: Game -> Bool
-isGameOver g = currBlockStopped g && g ^. currBlock ^. origin == startOrigin
+isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
 timeStep :: Game -> IO Game
-timeStep g = if (currBlockStopped g)
+timeStep g = if (blockStopped g)
                 then return . coreUpdater $ g
                 else stopUpdater . coreUpdater $ g
   where
@@ -192,17 +192,17 @@ points n = 800
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
 rotate :: Game -> Game
-rotate g = g & currBlock .~ nextB
+rotate g = g & block .~ nextB
   where nextB     = fromMaybe blk $ getFirst . mconcat $ bs
         bs        = map ($ blk) safeFuncs
         safeFuncs = map (mkSafe .) funcs
         mkSafe b  = if isValidBlockPosition b brd then First (Just b) else First Nothing
         funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
-        blk       = g ^. currBlock
+        blk       = g ^. block
         brd       = g ^. board
 
-currBlockStopped :: Game -> Bool
-currBlockStopped g = isStopped (g ^. board) (g ^. currBlock)
+blockStopped :: Game -> Bool
+blockStopped g = isStopped (g ^. board) (g ^. block)
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
@@ -211,21 +211,21 @@ isStopped b = any (`M.member` b) . map (translate Down) . blockCoords
 -- | Freeze current block
 freezeBlock :: Game -> Game
 freezeBlock g = g & board %~ (M.union blkMap)
-  where blk    = g ^. currBlock
+  where blk    = g ^. block
         blkMap = M.fromList $ zip (blk ^. to blockCoords) (repeat $ blk ^. shape)
 
--- | Replace currBlock with next block
+-- | Replace block with next block
 nextBlock :: Game -> IO Game
 nextBlock g = do
   (t, ts) <- bagFourTetriminoEach (g ^. nextShapeBag)
   return $
-    g & currBlock    .~ initBlock (g ^. nextShape)
+    g & block        .~ initBlock (g ^. nextShape)
       & nextShape    .~ t
       & nextShapeBag .~ ts
 
 -- | Try to shift current block; if shifting not possible, leave block where it is
 shift :: Direction -> Game -> Game
-shift d g = g & currBlock %~ shiftBlock
+shift d g = g & block %~ shiftBlock
   where shiftBlock b = if isValidBlockPosition (translate d b) (g ^. board)
                           then translate d b
                           else b
