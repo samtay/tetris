@@ -13,6 +13,8 @@ import Lens.Micro.TH
 import System.Random (getStdRandom, randomR)
 
 import Prelude hiding (Left, Right)
+import Data.Maybe (fromMaybe)
+import Data.Monoid (First(..))
 
 -- Types and instances
 
@@ -152,9 +154,16 @@ clearFullRows g = g & board %~ clearBoard
            in (x, y - offset)
 
 -- | Handle counterclockwise block rotation (if possible)
--- TODO wallkicks http://tetris.wikia.com/wiki/TGM_rotation
+-- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
 rotate :: Game -> Game
-rotate = undefined
+rotate g = g & currBlock .~ nextB
+  where nextB     = fromMaybe blk $ getFirst . mconcat $ bs
+        bs        = map ($ blk) safeFuncs
+        safeFuncs = map (mkSafe .) funcs
+        mkSafe b  = if isValidBlockPosition b brd then First (Just b) else First Nothing
+        funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
+        blk       = g ^. currBlock
+        brd       = g ^. board
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
