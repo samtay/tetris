@@ -6,7 +6,7 @@ module Tetris where
 
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Sequence (ViewL(..), (<|), (><))
+import Data.Sequence (ViewL(..), ViewR(..), (<|), (|>), (><))
 import qualified Data.Sequence as Seq
 import Lens.Micro
 import Lens.Micro.TH
@@ -49,6 +49,7 @@ data Game = Game
   , _currBlock :: Block
   , _nextShape :: Tetrimino
   , _nextShapeBag :: Seq.Seq Tetrimino
+  , _rowClears :: Seq.Seq Int
   , _score :: Int
   , _board :: Board
   } deriving (Eq, Show)
@@ -131,7 +132,7 @@ bagFourTetriminoEach = go . Seq.viewl
 -- | Initialize a game with a given level
 initGame :: Int ->  IO Game
 initGame lvl = do
-  (s1, bag1) <- bagFourTetriminoEach Seq.empty
+  (s1, bag1) <- bagFourTetriminoEach mempty
   (s2, bag2) <- bagFourTetriminoEach bag1
   return $
     Game { _level = lvl
@@ -139,19 +140,54 @@ initGame lvl = do
          , _nextShape = s2
          , _nextShapeBag = bag2
          , _score = 0
+         , _rowClears = mempty
          , _board = mempty }
+
+isGameOver :: Game -> Bool
+isGameOver g = currBlockStopped g && g ^. currBlock ^. origin == startOrigin
+
+timeStep :: Game -> IO Game
+timeStep g = if (currBlockStopped g)
+                then return . coreUpdater $ g
+                else stopUpdater . coreUpdater $ g
+  where
+    coreUpdater = gravitate
+    stopUpdater = nextBlock . updateScore . clearFullRows . freezeBlock
 
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game
 clearFullRows g = g & board %~ clearBoard
-  where clearBoard           = M.mapKeys shiftRowsAbove . M.filterWithKey isInFullRow
-        isInFullRow (_,y) _  = y `elem` fullRowIndices
-        fullRowIndices       = filter isFullRow [1..boardHeight]
-        isFullRow r          = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
-        inRow r (_, y) _     = r == y
-        shiftRowsAbove (x,y) =
-          let offset = length . filter (< y) $ fullRowIndices
-           in (x, y - offset)
+                    & rowClears %~ (|> rowCount)
+  where
+    clearBoard           = M.mapKeys shiftCoordAbove . M.filterWithKey isInFullRow
+    isInFullRow (_,y) _  = y `elem` fullRowIndices
+    rowCount             = length fullRowIndices
+    fullRowIndices       = filter isFullRow [1..boardHeight]
+    isFullRow r          = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
+    inRow r (_, y) _     = r == y
+    shiftCoordAbove (x,y) =
+      let offset = length . filter (< y) $ fullRowIndices
+       in (x, y - offset)
+
+-- | This updates game points with respect to the current
+-- _rowClears value (thus should only be used ONCE per step)
+--
+-- Note I'm keeping rowClears as a sequence in case I want to award
+-- more points for back to back clears, right now the scoring is more simple
+updateScore :: Game -> Game
+updateScore g = g & score %~ (+ newPoints)
+  where
+    newPoints = (g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
+
+-- | Points awarded from number of rows cleared
+points :: Int -- ^ rows cleared
+       -> Int -- ^ resulting points
+points 0 = 0
+points 1 = 40
+points 2 = 100
+points 3 = 300
+points n = 800
+
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
@@ -164,6 +200,9 @@ rotate g = g & currBlock .~ nextB
         funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
         blk       = g ^. currBlock
         brd       = g ^. board
+
+currBlockStopped :: Game -> Bool
+currBlockStopped g = isStopped (g ^. board) (g ^. currBlock)
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
@@ -219,3 +258,8 @@ shuffle xs
       let (left, right) = Seq.splitAt randomPosition xs
           (y :< ys)     = Seq.viewl right
       fmap (y <|) (shuffle $ left >< ys)
+
+latestOrZero :: Seq.Seq Int -> Int
+latestOrZero = go . Seq.viewr
+  where go EmptyR = 0
+        go (_ :> n) = n
