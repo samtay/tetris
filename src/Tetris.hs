@@ -217,7 +217,9 @@ blockStopped g = isStopped (g ^. board) (g ^. block)
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
-isStopped b = any (`M.member` b) . map (translate Down) . coords
+isStopped brd = any cStopped . coords
+  where cStopped     = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
+        inRow1 (_,y) = y == 1
 
 -- | Freeze current block
 freezeBlock :: Game -> Game
