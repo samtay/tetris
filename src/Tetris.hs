@@ -188,7 +188,7 @@ clearFullRows g = g & board %~ clearBoard
 updateScore :: Game -> Game
 updateScore g = g & score %~ (+ newPoints)
   where
-    newPoints = (g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
+    newPoints = (1 + g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
 
 -- | Points awarded from number of rows cleared
 points :: Int -- ^ rows cleared
