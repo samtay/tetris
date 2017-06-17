@@ -89,7 +89,7 @@ drawGrid g = withBorderStyle BS.unicodeBold
     blkMap = M.fromList [(c, Just $ g ^. block ^. shape) | c <- g ^. block ^. to coords]
 
 emptyMap :: Map Coord (Maybe a)
-emptyMap = M.fromList [((x,y), Nothing) | x <- [1..boardWidth], y <- [1,boardHeight]]
+emptyMap = M.fromList [((x,y), Nothing) | x <- [1..boardWidth], y <- [1..boardHeight]]
 
 drawMCell :: Maybe Tetrimino -> Widget Name
 drawMCell Nothing = withAttr emptyAttr cw

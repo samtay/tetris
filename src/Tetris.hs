@@ -82,7 +82,7 @@ initBlock :: Tetrimino -> Block
 initBlock t = Block t startOrigin $ offset startOrigin $ relCells t
 
 offset :: Coord -> [Coord] -> [Coord]
-offset (xo,yo) = fmap (\(x,y) -> (xo + x, yo + x))
+offset (xo,yo) = fmap (\(x,y) -> (xo + x, yo + y))
 
 relCells :: Tetrimino -> [Coord]
 relCells I = [(-2,0), (-1,0), (1,0)]
