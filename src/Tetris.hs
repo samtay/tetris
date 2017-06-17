@@ -207,7 +207,7 @@ rotate g = g & block .~ nextB
   where nextB     = fromMaybe blk $ getFirst . mconcat $ bs
         bs        = map ($ blk) safeFuncs
         safeFuncs = map (mkSafe .) funcs
-        mkSafe b  = if isValidBlockPosition b brd then First (Just b) else First Nothing
+        mkSafe b  = if isValidBlockPosition brd b then First (Just b) else First Nothing
         funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
         blk       = g ^. block
         brd       = g ^. board
@@ -237,7 +237,7 @@ nextBlock g = do
 -- | Try to shift current block; if shifting not possible, leave block where it is
 shift :: Direction -> Game -> Game
 shift d g = g & block %~ shiftBlock
-  where shiftBlock b = if isValidBlockPosition (translate d b) (g ^. board)
+  where shiftBlock b = if isValidBlockPosition (g ^. board) (translate d b)
                           then translate d b
                           else b
 
@@ -256,8 +256,8 @@ gravitate :: Game -> Game
 gravitate = shift Down
 
 -- | Checks if block's potential new location is valid
-isValidBlockPosition :: Block -> Board -> Bool
-isValidBlockPosition blk brd = all validCoord $ blk ^. to coords
+isValidBlockPosition :: Board -> Block -> Bool
+isValidBlockPosition brd = all validCoord . coords
   where validCoord = (&&) <$> isFree brd <*> isInBounds
 
 -- | Shuffle a sequence (random permutation)
