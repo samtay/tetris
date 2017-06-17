@@ -79,13 +79,19 @@ instance Translatable Block where
 -- Low level functions on blocks and coordinates
 
 initBlock :: Tetrimino -> Block
-initBlock I = Block I startOrigin [(-2,0), (-1,0), (1,0)]
-initBlock O = Block O startOrigin [(-1,0), (-1,-1), (0,-1)]
-initBlock S = Block S startOrigin [(-1,-1), (0,-1), (1,0)]
-initBlock Z = Block Z startOrigin [(-1,0), (0,-1), (1,-1)]
-initBlock L = Block L startOrigin [(-1,-1), (-1,0), (1,0)]
-initBlock J = Block J startOrigin [(-1,0), (1,0), (1,-1)]
-initBlock T = Block T startOrigin [(-1,0), (0,-1), (1,0)]
+initBlock t = Block t startOrigin $ offset startOrigin $ relCells t
+
+offset :: Coord -> [Coord] -> [Coord]
+offset (xo,yo) = fmap (\(x,y) -> (xo + x, yo + x))
+
+relCells :: Tetrimino -> [Coord]
+relCells I = [(-2,0), (-1,0), (1,0)]
+relCells O = [(-1,0), (-1,-1), (0,-1)]
+relCells S = [(-1,-1), (0,-1), (1,0)]
+relCells Z = [(-1,0), (0,-1), (1,-1)]
+relCells L = [(-1,-1), (-1,0), (1,0)]
+relCells J = [(-1,0), (1,0), (1,-1)]
+relCells T = [(-1,0), (0,-1), (1,0)]
 
 -- | Visible, active board size
 boardWidth, boardHeight :: Int
