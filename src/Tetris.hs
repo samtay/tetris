@@ -17,9 +17,9 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
 -- TODO
---   1. prune rowClears on zero
---   2. make sure argument orders make sense
 --   3. possibly add 'user' to game state to draw name entry from UI.Game
+--   4. sometimes freezes if manually shifting down while freezing
+--   5. implement hard drop with spacebar
 
 -- Types and instances
 
@@ -167,7 +167,7 @@ timeStep g = if (blockStopped g)
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game
 clearFullRows g = g & board %~ clearBoard
-                    & rowClears %~ (|> rowCount)
+                    & rowClears %~ (addToRowClears rowCount)
   where
     clearBoard            = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
     notInFullRow (_,y) _  = y `notElem` fullRowIndices
@@ -188,16 +188,22 @@ updateScore :: Game -> Game
 updateScore g = g & score %~ (+ newPoints)
   where
     newPoints = (1 + g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
+    points 0  = 0
+    points 1  = 40
+    points 2  = 100
+    points 3  = 300
+    points n  = 800
 
--- | Points awarded from number of rows cleared
-points :: Int -- ^ rows cleared
-       -> Int -- ^ resulting points
-points 0 = 0
-points 1 = 40
-points 2 = 100
-points 3 = 300
-points n = 800
+-- | Empties row on 0, otherwise appends value (just keeps consecutive information)
+addToRowClears :: Int -> Seq.Seq Int -> Seq.Seq Int
+addToRowClears 0 _  = mempty
+addToRowClears n rs = rs |> n
 
+-- | Get last value of sequence or 0 if empty
+latestOrZero :: Seq.Seq Int -> Int
+latestOrZero = go . Seq.viewr
+  where go EmptyR = 0
+        go (_ :> n) = n
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
@@ -270,8 +276,3 @@ shuffle xs
       let (left, right) = Seq.splitAt randomPosition xs
           (y :< ys)     = Seq.viewl right
       fmap (y <|) (shuffle $ left >< ys)
-
-latestOrZero :: Seq.Seq Int -> Int
-latestOrZero = go . Seq.viewr
-  where go EmptyR = 0
-        go (_ :> n) = n
