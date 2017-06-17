@@ -125,8 +125,8 @@ rotate' b@(Block s o@(xo,yo) cs)
     counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
 
 -- | Get coordinates of entire block
-blockCoords :: Block -> [Coord]
-blockCoords b = b ^. origin : b ^. extra
+coords :: Block -> [Coord]
+coords b = b ^. origin : b ^. extra
 
 -- Higher level functions on game and board
 
@@ -217,13 +217,13 @@ blockStopped g = isStopped (g ^. board) (g ^. block)
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
-isStopped b = any (`M.member` b) . map (translate Down) . blockCoords
+isStopped b = any (`M.member` b) . map (translate Down) . coords
 
 -- | Freeze current block
 freezeBlock :: Game -> Game
 freezeBlock g = g & board %~ (M.union blkMap)
   where blk    = g ^. block
-        blkMap = M.fromList $ zip (blk ^. to blockCoords) (repeat $ blk ^. shape)
+        blkMap = M.fromList $ zip (blk ^. to coords) (repeat $ blk ^. shape)
 
 -- | Replace block with next block
 nextBlock :: Game -> IO Game
@@ -257,7 +257,7 @@ gravitate = shift Down
 
 -- | Checks if block's potential new location is valid
 isValidBlockPosition :: Block -> Board -> Bool
-isValidBlockPosition blk brd = all validCoord $ blk ^. to blockCoords
+isValidBlockPosition blk brd = all validCoord $ blk ^. to coords
   where validCoord = (&&) <$> isFree brd <*> isInBounds
 
 -- | Shuffle a sequence (random permutation)
