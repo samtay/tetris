@@ -250,7 +250,7 @@ isOccupied = flip M.member
 
 -- | Check if coordinate is in or out of bounds
 isInBounds, isOutOfBounds :: Coord -> Bool
-isInBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..boardHeight]
+isInBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..]
 isOutOfBounds = not . isInBounds
 
 -- | Gravitate current block, i.e. shift down
