@@ -159,10 +159,9 @@ isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
 timeStep :: Game -> IO Game
 timeStep g = if (blockStopped g)
-                then return . coreUpdater $ g
-                else stopUpdater . coreUpdater $ g
+                then stopUpdater g
+                else return . gravitate $ g
   where
-    coreUpdater = gravitate
     stopUpdater = nextBlock . updateScore . clearFullRows . freezeBlock
 
 -- TODO check if mapKeysMonotonic works
