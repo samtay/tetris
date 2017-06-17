@@ -16,6 +16,11 @@ import Prelude hiding (Left, Right)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
+-- TODO
+--   1. prune rowClears on zero
+--   2. make sure argument orders make sense
+--   3. possibly add 'user' to game state to draw name entry from UI.Game
+
 -- Types and instances
 
 -- | Tetris shape types
