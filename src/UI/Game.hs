@@ -77,8 +77,8 @@ drawGrid :: Game -> Widget Name
 drawGrid g = withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Tetris")
   $ C.center
-  $ str $ show $ blkMap
-  -- $ foldr (<=>) emptyWidget rows
+  -- $ (str $ show $ mconcat [brdMap, blkMap, emptyMap])
+  $ vBox rows
   where
     rows = [foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
              | r <- [boardHeight,boardHeight-1..1]
@@ -116,9 +116,9 @@ drawScore n = vBox [ C.vCenter $ str "Score"
 drawNextShape :: Tetrimino -> Widget Name
 -- TODO try vbox and see if different than foldr
 drawNextShape t = padAll 1
-  $ foldr (<=>) emptyWidget $ mkRow <$> [0,-1]
+  $ vBox $ mkRow <$> [0,-1]
   where
-    mkRow y = foldr (<+>) emptyWidget $ drawMCell . cellAt . (,y) <$> [-2..1]
+    mkRow y = hBox $ drawMCell . cellAt . (,y) <$> [-2..1]
     cellAt (x,y) = if (x,y) `elem` cs then Just t else Nothing
     blk = Block t (0,0) (relCells t)
     cs = blk ^. to coords
