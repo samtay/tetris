@@ -169,12 +169,12 @@ clearFullRows :: Game -> Game
 clearFullRows g = g & board %~ clearBoard
                     & rowClears %~ (|> rowCount)
   where
-    clearBoard           = M.mapKeys shiftCoordAbove . M.filterWithKey isInFullRow
-    isInFullRow (_,y) _  = y `elem` fullRowIndices
-    rowCount             = length fullRowIndices
-    fullRowIndices       = filter isFullRow [1..boardHeight]
-    isFullRow r          = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
-    inRow r (_, y) _     = r == y
+    clearBoard            = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
+    notInFullRow (_,y) _  = y `notElem` fullRowIndices
+    rowCount              = length fullRowIndices
+    fullRowIndices        = filter isFullRow [1..boardHeight]
+    isFullRow r           = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
+    inRow r (_, y) _      = r == y
     shiftCoordAbove (x,y) =
       let offset = length . filter (< y) $ fullRowIndices
        in (x, y - offset)
