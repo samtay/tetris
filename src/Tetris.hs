@@ -224,7 +224,7 @@ isStopped brd = any cStopped . coords
 freezeBlock :: Game -> Game
 freezeBlock g = g & board %~ (M.union blkMap)
   where blk    = g ^. block
-        blkMap = M.fromList $ zip (blk ^. to coords) (repeat $ blk ^. shape)
+        blkMap = M.fromList $ [(c, blk ^. shape) | c <- blk ^. to coords]
 
 -- | Replace block with next block
 nextBlock :: Game -> IO Game
