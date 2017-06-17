@@ -106,7 +106,7 @@ drawCell t = withAttr (tToAttr t) cw
         tToAttr L = lAttr
 
 cw :: Widget Name
-cw = str "  "
+cw = str " ."
 
 drawScore :: Int -> Widget Name
 drawScore n = vBox [ C.vCenter $ str "Score"
@@ -125,13 +125,13 @@ drawNextShape t = padAll 1
 
 -- TODO test on mac terminal defAttr vs (bg black)
 theMap = attrMap V.defAttr
-  [ (iAttr, bg V.cyan)
-  , (oAttr, bg V.yellow)
-  , (tAttr, bg V.magenta)
-  , (sAttr, bg V.green)
-  , (zAttr, bg V.red)
-  , (jAttr, bg V.blue)
-  , (lAttr, bg V.white) -- damn no orange in ANSI
+  [ (iAttr, on V.cyan V.cyan)
+  , (oAttr, on V.yellow V.yellow)
+  , (tAttr, on V.magenta V.magenta)
+  , (sAttr, on V.green V.green)
+  , (zAttr, on V.red V.red)
+  , (jAttr, on V.blue V.blue)
+  , (lAttr, on V.white V.white) -- damn no orange in ANSI
   ]
 
 iAttr, oAttr, tAttr, sAttr, zAttr, jAttr, lAttr :: AttrName
