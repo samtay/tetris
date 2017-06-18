@@ -187,12 +187,13 @@ drawHelp = withBorderStyle BS.unicodeBold
     , ("Right", "l, →")
     , ("Down", "j, ↓")
     , ("Rotate", "k, ↑")
+    , ("Drop", "space")
     , ("Quit", "q")
     ]
 
 drawKeyInfo :: String -> String -> Widget Name
 drawKeyInfo action keys =
-  (padRight Max $ padLeft (Pad 1) $ str (action ++ ":"))
+  (padRight Max $ padLeft (Pad 1) $ str action)
   <+> (padLeft Max $ padRight (Pad 1) $ str keys)
 
 drawGameOver :: Game -> Widget Name
