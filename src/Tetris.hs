@@ -13,6 +13,7 @@ import Lens.Micro.TH
 import System.Random (getStdRandom, randomR)
 
 import Prelude hiding (Left, Right)
+import Data.Bool (bool)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
@@ -161,11 +162,11 @@ isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
 timeStep :: Game -> IO Game
-timeStep g = if (blockStopped g)
-                then stopUpdater g
-                else return . gravitate $ g
-  where
-    stopUpdater = nextBlock . updateScore . clearFullRows . freezeBlock
+timeStep =
+  bool
+    <$> (return . gravitate) -- if not stopped
+    <*> nextBlock . updateScore . clearFullRows . freezeBlock -- if stopped
+    <*> blockStopped -- predicate
 
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game
