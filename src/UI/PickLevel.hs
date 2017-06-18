@@ -21,13 +21,14 @@ app = App { appDraw = const [ui]
           }
 
 ui :: Widget ()
-ui =
-  C.center
-  $ hLimit 20 $ vLimit 30
+ui = padLeft (Pad 19) $ padRight (Pad 21)
+  $ C.center
+  $ vLimit 22
+  $ hLimit 22
   $ withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Tetris")
   $ C.center
-  $ str "Choose Level (0-9)"
+  $ str " Choose Level (0-9)"
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr []

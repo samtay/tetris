@@ -27,6 +27,8 @@ data Tick = Tick
 -- | Named resources
 type Name = ()
 
+data CellLocation = InGrid | InNextShape
+
 -- App definition and execution
 
 app :: App Game Tick Name
@@ -53,7 +55,7 @@ levelToDelay n = floor $ 400000 * 0.85 ^ (2 * n)
 -- Handling events
 
 handleEvent :: Game -> BrickEvent Name Tick -> EventM Name (Next Game)
-handleEvent g (AppEvent Tick)                       = liftIO (timeStep g) >>= continue
+handleEvent g (AppEvent Tick)                       = handleTick g
 handleEvent g (VtyEvent (V.EvKey V.KRight []))      = continue $ shift Right g
 handleEvent g (VtyEvent (V.EvKey V.KLeft []))       = continue $ shift Left g
 handleEvent g (VtyEvent (V.EvKey V.KDown []))       = continue $ shift Down g
@@ -63,38 +65,44 @@ handleEvent g (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt g
 handleEvent g (VtyEvent (V.EvKey V.KEsc []))        = halt g
 handleEvent g _                                     = continue g
 
+
+-- | Handles time steps, does nothing if game is over
+handleTick :: Game -> EventM Name (Next Game)
+handleTick g = if isGameOver g
+                  then continue g
+                  else liftIO (timeStep g) >>= continue
+
 -- Drawing
 
 drawUI :: Game -> [Widget Name]
 drawUI g =
-  [ hBox
-     [ drawScore (g ^. score)
-     , drawGrid g
-     , drawNextShape (g ^. nextShape)
-     ]
+  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ drawStats g
+                                 , drawGrid g
+                                 , padRight Max $ drawNextShape (g ^. nextShape)
+                                 ]
   ]
 
 drawGrid :: Game -> Widget Name
-drawGrid g = withBorderStyle BS.unicodeBold
+drawGrid g = hLimit 22
+  $ withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Tetris")
-  $ C.center
-  -- $ (str $ show $ mconcat [brdMap, blkMap, emptyMap])
   $ vBox rows
   where
     rows = [foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
              | r <- [boardHeight,boardHeight-1..1]
            ]
     inRow r (_,y) _ = r == y
-    gmap = drawMCell <$> mconcat [brdMap, blkMap, emptyMap]
+    gmap = drawMCell InGrid <$> mconcat [brdMap, blkMap, emptyMap]
     brdMap = Just <$> g ^. board
     blkMap = M.fromList [(c, Just $ g ^. block ^. shape) | c <- g ^. block ^. to coords]
 
 emptyMap :: Map Coord (Maybe a)
 emptyMap = M.fromList [((x,y), Nothing) | x <- [1..boardWidth], y <- [1..boardHeight]]
 
-drawMCell :: Maybe Tetrimino -> Widget Name
-drawMCell Nothing = withAttr emptyAttr cw
-drawMCell (Just t) = drawCell t
+drawMCell :: CellLocation -> Maybe Tetrimino -> Widget Name
+drawMCell InGrid Nothing = withAttr emptyAttr cw
+drawMCell InNextShape Nothing = withAttr emptyAttr ecw
+drawMCell _ (Just t) = drawCell t
 
 drawCell :: Tetrimino -> Widget Name
 drawCell t = withAttr (tToAttr t) cw
@@ -109,17 +117,36 @@ drawCell t = withAttr (tToAttr t) cw
 cw :: Widget Name
 cw = str " ."
 
-drawScore :: Int -> Widget Name
-drawScore n = vBox [ C.vCenter $ str "Score"
-                   , C.center $ str $ show n
-                   ]
+ecw :: Widget Name
+ecw = str "  "
+
+drawStats :: Game -> Widget Name
+drawStats g = padRight (Pad 2)
+  $ hLimit 22
+  $ withBorderStyle BS.unicodeBold
+  $ B.borderWithLabel (str "Stats")
+  $ vBox [ drawStat "Score" $ g ^. score
+         , drawStat "Level" $ g ^. level
+         , drawLeaderBoard g
+         ]
+
+drawStat :: String -> Int -> Widget Name
+drawStat s n = padLeftRight 1 $ padTop (Pad 1)
+  $ str s <+> (padLeft Max $ str $ show n)
+
+drawLeaderBoard :: Game -> Widget Name
+drawLeaderBoard g = emptyWidget
 
 drawNextShape :: Tetrimino -> Widget Name
--- TODO try vbox and see if different than foldr
-drawNextShape t = padAll 1
+drawNextShape t =
+  padLeft (Pad 2)
+  $ withBorderStyle BS.unicodeBold
+  $ B.borderWithLabel (str "Next Piece")
+  $ padTopBottom 1 $ padLeftRight 2
+  $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
-    mkRow y = hBox $ drawMCell . cellAt . (,y) <$> [-2..1]
+    mkRow y = hBox $ drawMCell InNextShape . cellAt . (,y) <$> [-2..1]
     cellAt (x,y) = if (x,y) `elem` cs then Just t else Nothing
     blk = Block t (0,0) (relCells t)
     cs = blk ^. to coords

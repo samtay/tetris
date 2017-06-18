@@ -19,7 +19,7 @@ import Data.Monoid (First(..))
 
 -- TODO
 --   1. USE linear V2 instead of tuples.. dummy
---   3. possibly add 'user' to game state to draw name entry from UI.Game
+--   2. leaderboard saved to txt file (requires adding viewport for name entry)
 
 -- Types and instances
 
