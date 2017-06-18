@@ -212,10 +212,10 @@ latestOrZero = go . Seq.viewr
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
 rotate :: Game -> Game
 rotate g = g & block .~ nextB
-  where nextB     = fromMaybe blk $ getFirst . mconcat $ bs
+  where nextB     = fromMaybe blk $ getFirst . mconcat $ First <$> bs
         bs        = map ($ blk) safeFuncs
         safeFuncs = map (mkSafe .) funcs
-        mkSafe b  = if isValidBlockPosition brd b then First (Just b) else First Nothing
+        mkSafe    = boolMaybe (isValidBlockPosition brd)
         funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
         blk       = g ^. block
         brd       = g ^. board
@@ -280,6 +280,8 @@ isValidBlockPosition :: Board -> Block -> Bool
 isValidBlockPosition brd = all validCoord . coords
   where validCoord = (&&) <$> isFree brd <*> isInBounds
 
+-- General utilities
+
 -- | Shuffle a sequence (random permutation)
 shuffle :: Seq.Seq a -> IO (Seq.Seq a)
 shuffle xs
@@ -289,3 +291,7 @@ shuffle xs
       let (left, right) = Seq.splitAt randomPosition xs
           (y :< ys)     = Seq.viewl right
       fmap (y <|) (shuffle $ left >< ys)
+
+-- | Take predicate and input and transform to Maybe
+boolMaybe :: (a -> Bool) -> a -> Maybe a
+boolMaybe p a = if p a then Just a else Nothing
