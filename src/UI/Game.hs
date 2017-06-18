@@ -59,12 +59,15 @@ handleEvent g (AppEvent Tick)                       = handleTick g
 handleEvent g (VtyEvent (V.EvKey V.KRight []))      = continue $ shift Right g
 handleEvent g (VtyEvent (V.EvKey V.KLeft []))       = continue $ shift Left g
 handleEvent g (VtyEvent (V.EvKey V.KDown []))       = continue $ shift Down g
+handleEvent g (VtyEvent (V.EvKey (V.KChar 'l') [])) = continue $ shift Right g
+handleEvent g (VtyEvent (V.EvKey (V.KChar 'h') [])) = continue $ shift Left g
+handleEvent g (VtyEvent (V.EvKey (V.KChar 'j') [])) = continue $ shift Down g
 handleEvent g (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ hardDrop g
 handleEvent g (VtyEvent (V.EvKey V.KUp []))         = continue $ rotate g
+handleEvent g (VtyEvent (V.EvKey (V.KChar 'k') [])) = continue $ rotate g
 handleEvent g (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt g
 handleEvent g (VtyEvent (V.EvKey V.KEsc []))        = halt g
 handleEvent g _                                     = continue g
-
 
 -- | Handles time steps, does nothing if game is over
 handleTick :: Game -> EventM Name (Next Game)
@@ -76,9 +79,9 @@ handleTick g = if isGameOver g
 
 drawUI :: Game -> [Widget Name]
 drawUI g =
-  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ drawStats g
+  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ padRight (Pad 2) $ drawStats g
                                  , drawGrid g
-                                 , padRight Max $ drawNextShape (g ^. nextShape)
+                                 , padRight Max $ padLeft (Pad 2) $ drawInfo g
                                  ]
   ]
 
@@ -114,6 +117,8 @@ drawCell t = withAttr (tToAttr t) cw
         tToAttr J = jAttr
         tToAttr L = lAttr
 
+-- TODO • for hardDrop preview
+
 cw :: Widget Name
 cw = str " ."
 
@@ -121,28 +126,31 @@ ecw :: Widget Name
 ecw = str "  "
 
 drawStats :: Game -> Widget Name
-drawStats g = padRight (Pad 2)
-  $ hLimit 22
+drawStats g = hLimit 22
   $ withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Stats")
   $ vBox [ drawStat "Score" $ g ^. score
-         , drawStat "Level" $ g ^. level
+         , padTop (Pad 1) $ drawStat "Level" $ g ^. level
          , drawLeaderBoard g
          ]
 
 drawStat :: String -> Int -> Widget Name
-drawStat s n = padLeftRight 1 $ padTop (Pad 1)
+drawStat s n = padLeftRight 1
   $ str s <+> (padLeft Max $ str $ show n)
 
 drawLeaderBoard :: Game -> Widget Name
 drawLeaderBoard g = emptyWidget
 
+drawInfo :: Game -> Widget Name
+drawInfo g = hLimit 16 -- size of next piece box
+  $ vBox [ drawNextShape (g ^. nextShape)
+         , padTop (Pad 2) $ drawHelp
+         ]
+
 drawNextShape :: Tetrimino -> Widget Name
-drawNextShape t =
-  padLeft (Pad 2)
-  $ withBorderStyle BS.unicodeBold
-  $ B.borderWithLabel (str "Next Piece")
-  $ padTopBottom 1 $ padLeftRight 2
+drawNextShape t = withBorderStyle BS.unicodeBold
+  $ B.borderWithLabel (str "Next")
+  $ padTopBottom 1 $ padLeftRight 3
   $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
@@ -150,6 +158,24 @@ drawNextShape t =
     cellAt (x,y) = if (x,y) `elem` cs then Just t else Nothing
     blk = Block t (0,0) (relCells t)
     cs = blk ^. to coords
+
+drawHelp :: Widget Name
+drawHelp = withBorderStyle BS.unicodeBold
+  $ B.borderWithLabel (str "Help")
+  $ padTopBottom 1
+  $ vBox $ map (uncurry drawKeyInfo)
+  $ [ ("Left", "h, ←")
+    , ("Right", "l, →")
+    , ("Down", "j, ↓")
+    , ("Rotate", "k, ↑")
+    , ("Quit", "q")
+    ]
+
+drawKeyInfo :: String -> String -> Widget Name
+drawKeyInfo action keys =
+  (padRight Max $ padLeft (Pad 1) $ str (action ++ ":"))
+  <+> (padLeft Max $ padRight (Pad 1) $ str keys)
+
 
 theMap = attrMap V.defAttr
   [ (iAttr, on V.cyan V.cyan)
