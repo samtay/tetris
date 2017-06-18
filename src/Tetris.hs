@@ -140,7 +140,7 @@ coords b = b ^. origin : b ^. extra
 bagFourTetriminoEach :: Seq.Seq Tetrimino -> IO (Tetrimino, Seq.Seq Tetrimino)
 bagFourTetriminoEach = go . Seq.viewl
   where
-    go (t :< ts) = return (t, ts)
+    go (t :< ts) = pure (t, ts)
     go EmptyL = freshList >>= bagFourTetriminoEach
     freshList = shuffle $ Seq.cycleTaking 28 $ Seq.fromList [(I)..]
 
@@ -149,7 +149,7 @@ initGame :: Int ->  IO Game
 initGame lvl = do
   (s1, bag1) <- bagFourTetriminoEach mempty
   (s2, bag2) <- bagFourTetriminoEach bag1
-  return $
+  pure $
     Game { _level = lvl
          , _block = initBlock s1
          , _nextShape = s2
@@ -164,7 +164,7 @@ isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 timeStep :: Game -> IO Game
 timeStep =
   bool
-    <$> (return . gravitate) -- if not stopped
+    <$> (pure . gravitate)                                -- if not stopped
     <*> nextBlock . updateScore . clearFullRows . freezeBlock -- if stopped
     <*> blockStopped -- predicate
 
@@ -250,7 +250,7 @@ freezeBlock g = g & board %~ (M.union blkMap)
 nextBlock :: Game -> IO Game
 nextBlock g = do
   (t, ts) <- bagFourTetriminoEach (g ^. nextShapeBag)
-  return $
+  pure $
     g & block        .~ initBlock (g ^. nextShape)
       & nextShape    .~ t
       & nextShapeBag .~ ts
