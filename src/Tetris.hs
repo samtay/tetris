@@ -21,7 +21,6 @@ import Data.Monoid (First(..))
 --   1. USE linear V2 instead of tuples.. dummy
 --   3. possibly add 'user' to game state to draw name entry from UI.Game
 --   4. sometimes freezes if manually shifting down while freezing
---   5. implement hard drop with spacebar
 
 -- Types and instances
 
@@ -156,9 +155,9 @@ isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 timeStep :: Game -> IO Game
 timeStep =
   bool
-    <$> (pure . gravitate)                                -- if not stopped
+    <$> (pure . gravitate)                                    -- if not stopped
     <*> nextBlock . updateScore . clearFullRows . freezeBlock -- if stopped
-    <*> blockStopped -- predicate
+    <*> blockStopped                                          -- predicate
 
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game

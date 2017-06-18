@@ -48,7 +48,7 @@ playGame lvl = do
   customMain (V.mkVty V.defaultConfig) (Just chan) app initialGame
 
 levelToDelay :: Int -> Int
-levelToDelay n = floor $ 400000 * 0.85 ^ (2 * n) -- n + (fromIntegral n)
+levelToDelay n = floor $ 400000 * 0.85 ^ (2 * n)
 
 -- Handling events
 
