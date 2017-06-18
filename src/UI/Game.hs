@@ -145,6 +145,7 @@ drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 16 -- size of next piece box
   $ vBox [ drawNextShape (g ^. nextShape)
          , padTop (Pad 2) $ drawHelp
+         , padTop (Pad 2) $ drawGameOver g
          ]
 
 drawNextShape :: Tetrimino -> Widget Name
@@ -176,7 +177,12 @@ drawKeyInfo action keys =
   (padRight Max $ padLeft (Pad 1) $ str (action ++ ":"))
   <+> (padLeft Max $ padRight (Pad 1) $ str keys)
 
+drawGameOver :: Game -> Widget Name
+drawGameOver g = if (isGameOver g)
+                    then padLeftRight 3 $ withAttr gameOverAttr $ str "GAME OVER"
+                    else emptyWidget
 
+theMap :: AttrMap
 theMap = attrMap V.defAttr
   [ (iAttr, on V.cyan V.cyan)
   , (oAttr, on V.yellow V.yellow)
@@ -185,6 +191,7 @@ theMap = attrMap V.defAttr
   , (zAttr, on V.red V.red)
   , (jAttr, on V.blue V.blue)
   , (lAttr, on V.white V.white) -- damn no orange in ANSI
+  , (gameOverAttr, fg V.red `V.withStyle` V.bold)
   ]
 
 iAttr, oAttr, tAttr, sAttr, zAttr, jAttr, lAttr :: AttrName
@@ -198,3 +205,6 @@ lAttr = "L"
 
 emptyAttr :: AttrName
 emptyAttr = "empty"
+
+gameOverAttr :: AttrName
+gameOverAttr = "gameOver"
