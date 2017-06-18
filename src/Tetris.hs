@@ -20,7 +20,6 @@ import Data.Monoid (First(..))
 -- TODO
 --   1. USE linear V2 instead of tuples.. dummy
 --   3. possibly add 'user' to game state to draw name entry from UI.Game
---   4. sometimes freezes if manually shifting down while freezing
 
 -- Types and instances
 
@@ -260,7 +259,7 @@ isOccupied = flip M.member
 
 -- | Check if coordinate is in or out of bounds
 isInBounds, isOutOfBounds :: Coord -> Bool
-isInBounds (x,y) = x `elem` [1..boardWidth] && y `elem` [1..]
+isInBounds (x,y) = 1 <= x && x <= boardWidth && 1 <= y
 isOutOfBounds = not . isInBounds
 
 -- | Gravitate current block, i.e. shift down
