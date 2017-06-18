@@ -17,14 +17,6 @@ import Data.Bool (bool)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
--- TODO
---   1. leaderboard saved to txt file (requires adding viewport for name entry)
---      and probably wrapping game in a ui state
---   2. USE linear V2 instead of tuples.. dummy
---   3. Consider refactoring (Game -> a) with State or Reader abstraction
---   4. README with gif
---   5. release binaries for darwin and linux
-
 -- Types and instances
 
 -- | Tetris shape types
