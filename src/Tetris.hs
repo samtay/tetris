@@ -21,9 +21,6 @@ import Data.Monoid (First(..))
 --   0. BUG in hard drop - if block is under an overhang then it gets sent above
 --   1. leaderboard saved to txt file (requires adding viewport for name entry)
 --      and probably wrapping game in a ui state
---   2. Add ToDo: Custom RGB colors or find a good theme and steal it. See if attribute monoid is used for defaulting when color not displayable?
---   2. Consider allow speeding up just like Conway (thus removing pickLevel and having one interface)
---   2. consider adding hard drop preview like other games, but need another color
 --   3. USE linear V2 instead of tuples.. dummy
 --   3. Consider refactoring (Game -> a) with State or Reader abstraction
 --   4. README with gif
@@ -229,7 +226,10 @@ isStopped brd = any cStopped . coords
         inRow1 (_,y) = y == 1
 
 hardDrop :: Game -> Game
-hardDrop g = g & block %~ translateBy n Down
+hardDrop g = g & block .~ hardDroppedBlock g
+
+hardDroppedBlock :: Game -> Block
+hardDroppedBlock g = translateBy n Down $ g ^. block
   where n = minimum $ (subtract 1) <$> (minY : diffs)
         diffs = [y - yo | (xo,yo) <- brdCs, (x,y) <- blkCs, xo == x]
         brdCs = M.keys $ M.filterWithKey inCols $ g ^. board

@@ -28,6 +28,7 @@ data Tick = Tick
 type Name = ()
 
 data CellLocation = InGrid | InNextShape
+data TVisual = Normal | HardDrop
 
 -- App definition and execution
 
@@ -95,35 +96,52 @@ drawGrid g = hLimit 22
              | r <- [boardHeight,boardHeight-1..1]
            ]
     inRow r (_,y) _ = r == y
-    gmap = drawMCell InGrid <$> mconcat [brdMap, blkMap, emptyMap]
-    brdMap = Just <$> g ^. board
-    blkMap = M.fromList [(c, Just $ g ^. block ^. shape) | c <- g ^. block ^. to coords]
+    gmap = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
+    brdMap = draw Normal . Just <$> g ^. board
+    hrdMap = blkMap (hardDroppedBlock g) HardDrop
+    cBlkMap = blkMap (g ^. block) Normal
+    blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
+    draw = drawMCell InGrid
 
-emptyMap :: Map Coord (Maybe a)
-emptyMap = M.fromList [((x,y), Nothing) | x <- [1..boardWidth], y <- [1..boardHeight]]
+emptyCellMap :: Map Coord (Widget Name)
+emptyCellMap = M.fromList cws
+  where
+    cws = [((x,y), ew) | x <- [1..boardWidth], y <- [1..boardHeight]]
+    ew = drawMCell InGrid Normal Nothing
 
-drawMCell :: CellLocation -> Maybe Tetrimino -> Widget Name
-drawMCell InGrid Nothing = withAttr emptyAttr cw
-drawMCell InNextShape Nothing = withAttr emptyAttr ecw
-drawMCell _ (Just t) = drawCell t
+drawMCell :: CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
+drawMCell InGrid _ Nothing = withAttr emptyAttr cw
+drawMCell InNextShape _ Nothing = withAttr emptyAttr ecw
+drawMCell _ v (Just t) = drawCell t v
 
-drawCell :: Tetrimino -> Widget Name
-drawCell t = withAttr (tToAttr t) cw
-  where tToAttr I = iAttr
-        tToAttr O = oAttr
-        tToAttr T = tAttr
-        tToAttr S = sAttr
-        tToAttr Z = zAttr
-        tToAttr J = jAttr
-        tToAttr L = lAttr
+drawCell :: Tetrimino -> TVisual ->  Widget Name
+drawCell t Normal = withAttr (tToAttr t) cw
+drawCell t HardDrop = withAttr (tToAttrH t) hcw
 
--- TODO • for hardDrop preview
+tToAttr I = iAttr
+tToAttr O = oAttr
+tToAttr T = tAttr
+tToAttr S = sAttr
+tToAttr Z = zAttr
+tToAttr J = jAttr
+tToAttr L = lAttr
+
+tToAttrH I = ihAttr
+tToAttrH O = ohAttr
+tToAttrH T = thAttr
+tToAttrH S = shAttr
+tToAttrH Z = zhAttr
+tToAttrH J = jhAttr
+tToAttrH L = lhAttr
 
 cw :: Widget Name
 cw = str " ."
 
 ecw :: Widget Name
 ecw = str "  "
+
+hcw :: Widget Name
+hcw = str "◤◢"
 
 drawStats :: Game -> Widget Name
 drawStats g = hLimit 22
@@ -155,7 +173,7 @@ drawNextShape t = withBorderStyle BS.unicodeBold
   $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
-    mkRow y = hBox $ drawMCell InNextShape . cellAt . (,y) <$> [-2..1]
+    mkRow y = hBox $ drawMCell InNextShape Normal . cellAt . (,y) <$> [-2..1]
     cellAt (x,y) = if (x,y) `elem` cs then Just t else Nothing
     blk = Block t (0,0) (relCells t)
     cs = blk ^. to coords
@@ -184,15 +202,33 @@ drawGameOver g = if (isGameOver g)
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr
-  [ (iAttr, on V.cyan V.cyan)
-  , (oAttr, on V.yellow V.yellow)
-  , (tAttr, on V.magenta V.magenta)
-  , (sAttr, on V.green V.green)
-  , (zAttr, on V.red V.red)
-  , (jAttr, on V.blue V.blue)
-  , (lAttr, on V.white V.white) -- damn no orange in ANSI
+  [ (iAttr, tToColor I `on` tToColor I)
+  , (oAttr, tToColor O `on` tToColor O)
+  , (tAttr, tToColor T `on` tToColor T)
+  , (sAttr, tToColor S `on` tToColor S)
+  , (zAttr, tToColor Z `on` tToColor Z)
+  , (jAttr, tToColor J `on` tToColor J)
+  , (lAttr, tToColor L `on` tToColor L)
+  -- attributes for hard drop preview (would be VERY clean if I could figure out how to
+  -- query for default background color.. alas
+  , (ihAttr, fg $ tToColor I)
+  , (ohAttr, fg $ tToColor O)
+  , (thAttr, fg $ tToColor T)
+  , (shAttr, fg $ tToColor S)
+  , (zhAttr, fg $ tToColor Z)
+  , (jhAttr, fg $ tToColor J)
+  , (lhAttr, fg $ tToColor L)
   , (gameOverAttr, fg V.red `V.withStyle` V.bold)
   ]
+
+tToColor :: Tetrimino -> V.Color
+tToColor I = V.cyan
+tToColor O = V.yellow
+tToColor T = V.magenta
+tToColor S = V.green
+tToColor Z = V.red
+tToColor J = V.blue
+tToColor L = V.white
 
 iAttr, oAttr, tAttr, sAttr, zAttr, jAttr, lAttr :: AttrName
 iAttr = "I"
@@ -202,6 +238,15 @@ sAttr = "S"
 zAttr = "Z"
 jAttr = "J"
 lAttr = "L"
+
+ihAttr, ohAttr, thAttr, shAttr, zhAttr, jhAttr, lhAttr :: AttrName
+ihAttr = "Ih"
+ohAttr = "Oh"
+thAttr = "Th"
+shAttr = "Sh"
+zhAttr = "Zh"
+jhAttr = "Jh"
+lhAttr = "Lh"
 
 emptyAttr :: AttrName
 emptyAttr = "empty"
