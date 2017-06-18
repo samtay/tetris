@@ -116,16 +116,8 @@ rotate' b@(Block s o@(xo,yo) cs)
   | otherwise = rotateWith counterclockwise b
   where
     rotateWith :: (Coord -> Coord -> Coord) -> Block -> Block
-    rotateWith dir b = b & extra %~ fmap (dir (b ^. origin))
-
-    clockwise :: Coord -- ^ origin
-              -> Coord -- ^ point to rotate around origin
-              -> Coord
-    clockwise (xo, yo) (x, y) = (xo + y - yo, xo + y - x)
-
-    counterclockwise :: Coord -- ^ origin
-                     -> Coord -- ^ point to rotate around origin
-                     -> Coord
+    rotateWith dir b                 = b & extra %~ fmap (dir (b ^. origin))
+    clockwise (xo, yo) (x, y)        = (xo + y - yo, xo + yo - x)
     counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
 
 -- | Get coordinates of entire block
