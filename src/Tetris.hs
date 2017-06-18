@@ -18,8 +18,13 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
 -- TODO
---   1. USE linear V2 instead of tuples.. dummy
---   2. leaderboard saved to txt file (requires adding viewport for name entry)
+--   0. BUG in hard drop - if block is under an overhang then it gets sent above
+--   1. leaderboard saved to txt file (requires adding viewport for name entry)
+--      and probably wrapping game in a ui state
+--   2. consider adding hard drop preview like other games, but need another color
+--   3. USE linear V2 instead of tuples.. dummy
+--   4. README with gif
+--   5. release binaries for darwin and linux
 
 -- Types and instances
 

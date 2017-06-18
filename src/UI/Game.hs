@@ -151,7 +151,6 @@ drawNextShape t =
     blk = Block t (0,0) (relCells t)
     cs = blk ^. to coords
 
--- TODO test on mac terminal defAttr vs (bg black)
 theMap = attrMap V.defAttr
   [ (iAttr, on V.cyan V.cyan)
   , (oAttr, on V.yellow V.yellow)
