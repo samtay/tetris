@@ -18,10 +18,9 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
 -- TODO
---   0. BUG in hard drop - if block is under an overhang then it gets sent above
 --   1. leaderboard saved to txt file (requires adding viewport for name entry)
 --      and probably wrapping game in a ui state
---   3. USE linear V2 instead of tuples.. dummy
+--   2. USE linear V2 instead of tuples.. dummy
 --   3. Consider refactoring (Game -> a) with State or Reader abstraction
 --   4. README with gif
 --   5. release binaries for darwin and linux
@@ -231,11 +230,9 @@ hardDrop g = g & block .~ hardDroppedBlock g
 hardDroppedBlock :: Game -> Block
 hardDroppedBlock g = translateBy n Down $ g ^. block
   where n = minimum $ (subtract 1) <$> (minY : diffs)
-        diffs = [y - yo | (xo,yo) <- brdCs, (x,y) <- blkCs, xo == x]
-        brdCs = M.keys $ M.filterWithKey inCols $ g ^. board
+        diffs = [y - yo | (xo,yo) <- brdCs, (x,y) <- blkCs, xo == x, yo < y]
+        brdCs = g ^. board ^. to M.keys
         blkCs = g ^. block ^. to coords
-        inCols (x,_) _ = x `elem` cols
-        cols  = fst <$> blkCs
         minY = minimum (snd <$> blkCs)
 
 -- | Freeze current block
