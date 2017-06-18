@@ -57,6 +57,7 @@ handleEvent g (AppEvent Tick)                       = liftIO (timeStep g) >>= co
 handleEvent g (VtyEvent (V.EvKey V.KRight []))      = continue $ shift Right g
 handleEvent g (VtyEvent (V.EvKey V.KLeft []))       = continue $ shift Left g
 handleEvent g (VtyEvent (V.EvKey V.KDown []))       = continue $ shift Down g
+handleEvent g (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ hardDrop g
 handleEvent g (VtyEvent (V.EvKey V.KUp []))         = continue $ rotate g
 handleEvent g (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt g
 handleEvent g (VtyEvent (V.EvKey V.KEsc []))        = halt g

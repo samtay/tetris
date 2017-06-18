@@ -17,6 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
 
 -- TODO
+--   1. USE linear V2 instead of tuples.. dummy
 --   3. possibly add 'user' to game state to draw name entry from UI.Game
 --   4. sometimes freezes if manually shifting down while freezing
 --   5. implement hard drop with spacebar
@@ -65,16 +66,18 @@ makeLenses ''Game
 -- 'shift' concerns safe translations with boundaries
 class Translatable s where
   translate :: Direction -> s -> s
+  translate = translateBy 1
+  translateBy :: Int -> Direction -> s -> s
 
 instance Translatable Coord where
-  translate Left (x, y) = (x-1, y)
-  translate Right (x, y) = (x+1, y)
-  translate Down (x,y) = (x, y-1)
+  translateBy n Left (x, y)  = (x-n, y)
+  translateBy n Right (x, y) = (x+n, y)
+  translateBy n Down (x,y)   = (x, y-n)
 
 instance Translatable Block where
-  translate d b =
-    b & origin %~ translate d
-      & extra %~ fmap (translate d)
+  translateBy n d b =
+    b & origin %~ translateBy n d
+      & extra  %~ fmap (translateBy n d)
 
 -- Low level functions on blocks and coordinates
 
@@ -225,6 +228,16 @@ isStopped :: Board -> Block -> Bool
 isStopped brd = any cStopped . coords
   where cStopped     = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
         inRow1 (_,y) = y == 1
+
+hardDrop :: Game -> Game
+hardDrop g = g & block %~ translateBy n Down
+  where n = minimum $ (subtract 1) <$> (minY : diffs)
+        diffs = [y - yo | (xo,yo) <- brdCs, (x,y) <- blkCs, xo == x]
+        brdCs = M.keys $ M.filterWithKey inCols $ g ^. board
+        blkCs = g ^. block ^. to coords
+        inCols (x,_) _ = x `elem` cols
+        cols  = fst <$> blkCs
+        minY = minimum (snd <$> blkCs)
 
 -- | Freeze current block
 freezeBlock :: Game -> Game
