@@ -9,12 +9,9 @@ A terminal interface for Tetris
 For Mac and Linux, the binaries attached to the GitHub release should suffice.
 Here is a quick way to get the one for your OS:
 ```bash
-# first log in as root
-sudo -i
-# then download binary and apply permissions
-curl -L https://github.com/samtay/tetris/releases/download/0.1.0/tetris-`uname -s`-`uname -m` > /usr/local/bin/tetris
-chmod +x /usr/local/bin/tetris
-exit
+curl -L https://github.com/samtay/tetris/releases/download/0.1.0/tetris-`uname -s`-`uname -m` -o tetris
+chmod +x tetris
+sudo mv tetris /usr/local/bin/
 ```
 
 For Windows, you have to install from source. First [get stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). Then
