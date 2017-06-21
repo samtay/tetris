@@ -6,7 +6,7 @@ A terminal interface for Tetris
 
 ## installation
 
-For Mac and Linux, the binaries attached to the GitHub release should suffice ([instructions](#github-release-binaries)). For other Linux distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
+For Mac and ArchLinux, the binaries attached to the GitHub release should suffice ([instructions](#github-release-binaries)). For other Linux distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
 
 I have not tested Windows, but I do think it should work via dex. Please let me know in an issue if it fails so I can update documentation. Thanks!
 
