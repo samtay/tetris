@@ -37,10 +37,12 @@ sudo mv dex /usr/local/bin
 # add tetris as a repo
 dex repo add tetris https://github.com/samtay/tetris.git
 
-# install globally (so that you dont need to run `dex run tetris`)
-dex install --global tetris
+# run tetris
+dex run tetris
 
-# test it out
+### optionally install tetris globally ###
+export PATH="$HOME/.dex/bin:$PATH"
+dex install --global tetris
 tetris
 ```
 
