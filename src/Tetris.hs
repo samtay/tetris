@@ -46,13 +46,14 @@ type Board = Map Coord Tetrimino
 
 -- | Game state
 data Game = Game
-  { _level :: Int
-  , _block :: Block
-  , _nextShape :: Tetrimino
+  { _level        :: Int
+  , _block        :: Block
+  , _nextShape    :: Tetrimino
   , _nextShapeBag :: Seq.Seq Tetrimino
-  , _rowClears :: Seq.Seq Int
-  , _score :: Int
-  , _board :: Board
+  , _rowClears    :: Seq.Seq Int
+  , _score        :: Int
+  , _board        :: Board
+  , _frozen       :: Bool
   } deriving (Eq, Show)
 
 makeLenses ''Game
@@ -142,17 +143,17 @@ initGame lvl = do
          , _nextShapeBag = bag2
          , _score = 0
          , _rowClears = mempty
+         , _frozen = False
          , _board = mempty }
 
 isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
 timeStep :: Game -> IO Game
-timeStep =
-  bool
-    <$> (pure . gravitate)                                    -- if not stopped
-    <*> nextBlock . updateScore . clearFullRows . freezeBlock -- if stopped
-    <*> blockStopped                                          -- predicate
+timeStep g = (& frozen .~ False)
+  <$> if blockStopped g
+         then nextBlock . updateScore . clearFullRows . freezeBlock $ g
+         else pure . gravitate $ g
 
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game
@@ -217,7 +218,8 @@ isStopped brd = any cStopped . coords
         inRow1 (_,y) = y == 1
 
 hardDrop :: Game -> Game
-hardDrop g = g & block .~ hardDroppedBlock g
+hardDrop g = g & block  .~ hardDroppedBlock g
+               & frozen .~ True
 
 hardDroppedBlock :: Game -> Block
 hardDroppedBlock g = translateBy n Down $ g ^. block
@@ -245,7 +247,7 @@ nextBlock g = do
 -- | Try to shift current block; if shifting not possible, leave block where it is
 shift :: Direction -> Game -> Game
 shift d g = g & block %~ shiftBlock
-  where shiftBlock b = if isValidBlockPosition (g ^. board) (translate d b)
+  where shiftBlock b = if not (g ^. frozen) && isValidBlockPosition (g ^. board) (translate d b)
                           then translate d b
                           else b
 
