@@ -41,8 +41,8 @@ app = App { appDraw = drawUI
           , appAttrMap = const theMap
           }
 
-playGame :: Int -> IO Game
-playGame lvl = do
+playGame :: Int -> Maybe String -> IO Game
+playGame lvl _ = do
   let delay = levelToDelay lvl
   chan <- newBChan 10
   forkIO $ forever $ do
