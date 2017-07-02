@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 module UI.Game
@@ -20,7 +21,16 @@ import qualified Graphics.Vty as V
 import Data.Map (Map)
 import qualified Data.Map as M
 import Lens.Micro
+import Lens.Micro.TH (makeLenses)
 import Linear.V2 (V2(..), _x, _y)
+
+data UI = UI
+  { _game    :: Game         -- ^ tetris game
+  , _preview :: Maybe String -- ^ hard drop preview cell
+  , _frozen  :: Bool         -- ^ freeze after hard drop before time step
+  }
+
+makeLenses ''UI
 
 -- | Ticks mark passing of time
 data Tick = Tick
@@ -33,7 +43,7 @@ data TVisual = Normal | HardDrop
 
 -- App definition and execution
 
-app :: App Game Tick Name
+app :: App UI Tick Name
 app = App { appDraw = drawUI
           , appChooseCursor = neverShowCursor
           , appHandleEvent = handleEvent
@@ -42,53 +52,69 @@ app = App { appDraw = drawUI
           }
 
 playGame :: Int -> Maybe String -> IO Game
-playGame lvl _ = do
+playGame lvl mp = do
   let delay = levelToDelay lvl
   chan <- newBChan 10
   forkIO $ forever $ do
     writeBChan chan Tick
     threadDelay delay
   initialGame <- initGame lvl
-  customMain (V.mkVty V.defaultConfig) (Just chan) app initialGame
+  let initialUI = UI initialGame mp False
+  ui <- customMain (V.mkVty V.defaultConfig) (Just chan) app initialUI
+  return $ ui ^. game
 
 levelToDelay :: Int -> Int
 levelToDelay n = floor $ 400000 * 0.85 ^ (2 * n)
 
 -- Handling events
 
-handleEvent :: Game -> BrickEvent Name Tick -> EventM Name (Next Game)
-handleEvent g (AppEvent Tick)                       = handleTick g
-handleEvent g (VtyEvent (V.EvKey V.KRight []))      = continue $ shift Right g
-handleEvent g (VtyEvent (V.EvKey V.KLeft []))       = continue $ shift Left g
-handleEvent g (VtyEvent (V.EvKey V.KDown []))       = continue $ shift Down g
-handleEvent g (VtyEvent (V.EvKey (V.KChar 'l') [])) = continue $ shift Right g
-handleEvent g (VtyEvent (V.EvKey (V.KChar 'h') [])) = continue $ shift Left g
-handleEvent g (VtyEvent (V.EvKey (V.KChar 'j') [])) = continue $ shift Down g
-handleEvent g (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ hardDrop g
-handleEvent g (VtyEvent (V.EvKey V.KUp []))         = continue $ rotate g
-handleEvent g (VtyEvent (V.EvKey (V.KChar 'k') [])) = continue $ rotate g
-handleEvent g (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt g
-handleEvent g (VtyEvent (V.EvKey V.KEsc []))        = halt g
-handleEvent g _                                     = continue g
+handleEvent :: UI -> BrickEvent Name Tick -> EventM Name (Next UI)
+handleEvent ui (AppEvent Tick)                       = handleTick ui
+handleEvent ui (VtyEvent (V.EvKey V.KRight []))      = frozenGuard (shift Right) ui
+handleEvent ui (VtyEvent (V.EvKey V.KLeft []))       = frozenGuard (shift Left) ui
+handleEvent ui (VtyEvent (V.EvKey V.KDown []))       = frozenGuard (shift Down) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'l') [])) = frozenGuard (shift Right) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'h') [])) = frozenGuard (shift Left) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = frozenGuard (shift Down) ui
+handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = frozenGuard rotate ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = frozenGuard rotate ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ hardDrop
+                                                                     & frozen .~ True
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
+handleEvent ui (VtyEvent (V.EvKey V.KEsc []))        = halt ui
+handleEvent ui _                                     = continue ui
+
+-- | If frozen, return same UI, else execute game op
+frozenGuard :: (Game -> Game) -> UI -> EventM Name (Next UI)
+frozenGuard op ui = continue
+  $ if ui ^. frozen
+       then ui
+       else ui & game %~ op
 
 -- | Handles time steps, does nothing if game is over
-handleTick :: Game -> EventM Name (Next Game)
-handleTick g = if isGameOver g
-                  then continue g
-                  else liftIO (timeStep g) >>= continue
+handleTick :: UI -> EventM Name (Next UI)
+handleTick ui =
+  if isGameOver g
+     then continue ui
+     else do
+       g' <- liftIO (timeStep g)
+       continue $ ui & game .~ g'
+                     & frozen .~ False
+  where g = ui ^. game
+
 
 -- Drawing
 
-drawUI :: Game -> [Widget Name]
-drawUI g =
-  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ padRight (Pad 2) $ drawStats g
-                                 , drawGrid g
-                                 , padRight Max $ padLeft (Pad 2) $ drawInfo g
+drawUI :: UI -> [Widget Name]
+drawUI ui =
+  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ padRight (Pad 2) $ drawStats (ui ^. game)
+                                 , drawGrid ui
+                                 , padRight Max $ padLeft (Pad 2) $ drawInfo (ui ^. game)
                                  ]
   ]
 
-drawGrid :: Game -> Widget Name
-drawGrid g = hLimit 22
+drawGrid :: UI -> Widget Name
+drawGrid ui = hLimit 22
   $ withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Tetris")
   $ vBox rows
@@ -102,22 +128,24 @@ drawGrid g = hLimit 22
     hrdMap = blkMap (hardDroppedBlock g) HardDrop
     cBlkMap = blkMap (g ^. block) Normal
     blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
-    draw = drawMCell InGrid
+    draw = drawMCell (ui ^. preview) InGrid
+    g = ui ^. game
 
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap = M.fromList cws
   where
     cws = [((V2 x y), ew) | x <- [1..boardWidth], y <- [1..boardHeight]]
-    ew = drawMCell InGrid Normal Nothing
+    ew = drawMCell Nothing InGrid Normal Nothing
 
-drawMCell :: CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
-drawMCell InGrid _ Nothing = withAttr emptyAttr cw
-drawMCell InNextShape _ Nothing = withAttr emptyAttr ecw
-drawMCell _ v (Just t) = drawCell t v
+drawMCell :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
+drawMCell _ InGrid _ Nothing      = withAttr emptyAttr cw
+drawMCell _ InNextShape _ Nothing = withAttr emptyAttr ecw
+drawMCell mp _ v (Just t)         = drawCell mp t v
 
-drawCell :: Tetrimino -> TVisual ->  Widget Name
-drawCell t Normal = withAttr (tToAttr t) cw
-drawCell t HardDrop = withAttr (tToAttrH t) hcw
+drawCell :: Maybe String -> Tetrimino -> TVisual ->  Widget Name
+drawCell _ t Normal          = withAttr (tToAttr t) cw
+drawCell Nothing t HardDrop  = withAttr (tToAttrH t) hcw
+drawCell (Just p) t HardDrop = withAttr (tToAttrH t) (str p)
 
 tToAttr I = iAttr
 tToAttr O = oAttr
@@ -174,7 +202,7 @@ drawNextShape t = withBorderStyle BS.unicodeBold
   $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
-    mkRow y = hBox $ drawMCell InNextShape Normal . cellAt . (`V2` y) <$> [-2..1]
+    mkRow y = hBox $ drawMCell Nothing InNextShape Normal . cellAt . (`V2` y) <$> [-2..1]
     cellAt (V2 x y) = if (V2 x y) `elem` cs then Just t else Nothing
     blk = Block t (V2 0 0) (relCells t)
     cs = blk ^. to coords
