@@ -57,5 +57,4 @@ tetris
 
 1. Leaderboard saved to txt file (requires adding brick viewport for name entry)
 and probably wrapping game in a ui state type
-2. Use linear V2 instead of tuples.. dummy
 3. Consider refactoring (Game -> a) types with State or Reader abstraction

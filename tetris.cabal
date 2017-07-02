@@ -20,7 +20,8 @@ library
                      , UI.Game
   build-depends:       base >= 4.7 && < 5
                      , brick
-                     , containers == 0.5.10.2
+                     , containers
+                     , linear
                      , microlens
                      , microlens-th
                      , random

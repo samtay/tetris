@@ -2,8 +2,7 @@ flags: {}
 extra-package-dbs: []
 packages:
 - '.'
-extra-deps:
-- containers-0.5.10.2
+extra-deps: []
 resolver: lts-8.18
 nix:
   packages: [gcc, ncurses]

@@ -20,6 +20,7 @@ import qualified Graphics.Vty as V
 import Data.Map (Map)
 import qualified Data.Map as M
 import Lens.Micro
+import Linear.V2 (V2(..), _x, _y)
 
 -- | Ticks mark passing of time
 data Tick = Tick
@@ -95,7 +96,7 @@ drawGrid g = hLimit 22
     rows = [foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
              | r <- [boardHeight,boardHeight-1..1]
            ]
-    inRow r (_,y) _ = r == y
+    inRow r (V2 _ y) _ = r == y
     gmap = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
     brdMap = draw Normal . Just <$> g ^. board
     hrdMap = blkMap (hardDroppedBlock g) HardDrop
@@ -106,7 +107,7 @@ drawGrid g = hLimit 22
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap = M.fromList cws
   where
-    cws = [((x,y), ew) | x <- [1..boardWidth], y <- [1..boardHeight]]
+    cws = [((V2 x y), ew) | x <- [1..boardWidth], y <- [1..boardHeight]]
     ew = drawMCell InGrid Normal Nothing
 
 drawMCell :: CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
@@ -173,9 +174,9 @@ drawNextShape t = withBorderStyle BS.unicodeBold
   $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
-    mkRow y = hBox $ drawMCell InNextShape Normal . cellAt . (,y) <$> [-2..1]
-    cellAt (x,y) = if (x,y) `elem` cs then Just t else Nothing
-    blk = Block t (0,0) (relCells t)
+    mkRow y = hBox $ drawMCell InNextShape Normal . cellAt . (`V2` y) <$> [-2..1]
+    cellAt (V2 x y) = if (V2 x y) `elem` cs then Just t else Nothing
+    blk = Block t (V2 0 0) (relCells t)
     cs = blk ^. to coords
 
 drawHelp :: Widget Name

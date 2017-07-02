@@ -1,6 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 module Tetris where
 
@@ -10,6 +8,8 @@ import Data.Sequence (ViewL(..), ViewR(..), (<|), (|>), (><))
 import qualified Data.Sequence as Seq
 import Lens.Micro
 import Lens.Micro.TH
+import Linear.V2 (V2(..), _x, _y)
+import qualified Linear.V2 as LV
 import System.Random (getStdRandom, randomR)
 
 import Prelude hiding (Left, Right)
@@ -24,7 +24,7 @@ data Tetrimino = I | O | T | S | Z | J | L
   deriving (Eq, Show, Enum)
 
 -- | Coordinates
-type Coord = (Int, Int)
+type Coord = V2 Int
 
 -- | Tetris shape in location context
 data Block = Block
@@ -66,9 +66,9 @@ class Translatable s where
   translateBy :: Int -> Direction -> s -> s
 
 instance Translatable Coord where
-  translateBy n Left (x, y)  = (x-n, y)
-  translateBy n Right (x, y) = (x+n, y)
-  translateBy n Down (x,y)   = (x, y-n)
+  translateBy n Left (V2 x y)  = V2 (x-n) y
+  translateBy n Right (V2 x y) = V2 (x+n) y
+  translateBy n Down (V2 x y)  = V2 x (y-n)
 
 instance Translatable Block where
   translateBy n d b =
@@ -78,19 +78,16 @@ instance Translatable Block where
 -- Low level functions on blocks and coordinates
 
 initBlock :: Tetrimino -> Block
-initBlock t = Block t startOrigin $ offset startOrigin $ relCells t
-
-offset :: Coord -> [Coord] -> [Coord]
-offset (xo,yo) = fmap (\(x,y) -> (xo + x, yo + y))
+initBlock t = Block t startOrigin . fmap (+ startOrigin) . relCells $ t
 
 relCells :: Tetrimino -> [Coord]
-relCells I = [(-2,0), (-1,0), (1,0)]
-relCells O = [(-1,0), (-1,-1), (0,-1)]
-relCells S = [(-1,-1), (0,-1), (1,0)]
-relCells Z = [(-1,0), (0,-1), (1,-1)]
-relCells L = [(-1,-1), (-1,0), (1,0)]
-relCells J = [(-1,0), (1,0), (1,-1)]
-relCells T = [(-1,0), (0,-1), (1,0)]
+relCells I = map v2 [(-2,0), (-1,0), (1,0)]
+relCells O = map v2 [(-1,0), (-1,-1), (0,-1)]
+relCells S = map v2 [(-1,-1), (0,-1), (1,0)]
+relCells Z = map v2 [(-1,0), (0,-1), (1,-1)]
+relCells L = map v2 [(-1,-1), (-1,0), (1,0)]
+relCells J = map v2 [(-1,0), (1,0), (1,-1)]
+relCells T = map v2 [(-1,0), (0,-1), (1,0)]
 
 -- | Visible, active board size
 boardWidth, boardHeight :: Int
@@ -99,21 +96,22 @@ boardHeight = 20
 
 -- | Starting block origin
 startOrigin :: Coord
-startOrigin = (6, 22)
+startOrigin = V2 6 22
 
 -- | Rotate block counter clockwise about origin
 -- *Note*: Strict unsafe rotation not respecting boundaries
 -- Safety can only be assured within Game context
 rotate' :: Block -> Block
-rotate' b@(Block s o@(xo,yo) cs)
+rotate' b@(Block s o@(V2 xo yo) cs)
   | s == O = b -- O doesn't need rotation
-  | s == I && (xo,yo+1) `elem` cs = rotateWith clockwise b -- I only has two orientations
-  | otherwise = rotateWith counterclockwise b
+  | s == I && V2 xo (yo+1) `elem` cs = rotateWith clockwise -- I only has two orientations
+  | otherwise = rotateWith counterclockwise
   where
-    rotateWith :: (Coord -> Coord -> Coord) -> Block -> Block
-    rotateWith dir b                 = b & extra %~ fmap (dir (b ^. origin))
-    clockwise (xo, yo) (x, y)        = (xo + y - yo, xo + yo - x)
-    counterclockwise (xo, yo) (x, y) = (xo + yo - y, x + yo - xo)
+    rotateWith :: (Coord -> Coord) -> Block
+    rotateWith dir   = b & extra %~ fmap dir
+    clockwise        = (+ o) . (cwperp) . (subtract o)
+    counterclockwise = (+ o) . LV.perp . (subtract o)
+    cwperp (V2 x y)  = V2 x (-y)
 
 -- | Get coordinates of entire block
 coords :: Block -> [Coord]
@@ -129,7 +127,7 @@ bagFourTetriminoEach = go . Seq.viewl
   where
     go (t :< ts) = pure (t, ts)
     go EmptyL = freshList >>= bagFourTetriminoEach
-    freshList = shuffle $ Seq.cycleTaking 28 $ Seq.fromList [(I)..]
+    freshList = shuffle . Seq.fromList . take 28 . cycle $ [(I)..]
 
 -- | Initialize a game with a given level
 initGame :: Int ->  IO Game
@@ -160,15 +158,15 @@ clearFullRows :: Game -> Game
 clearFullRows g = g & board %~ clearBoard
                     & rowClears %~ (addToRowClears rowCount)
   where
-    clearBoard            = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
-    notInFullRow (_,y) _  = y `notElem` fullRowIndices
-    rowCount              = length fullRowIndices
-    fullRowIndices        = filter isFullRow [1..boardHeight]
-    isFullRow r           = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
-    inRow r (_, y) _      = r == y
-    shiftCoordAbove (x,y) =
+    clearBoard               = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
+    notInFullRow (V2 _ y) _  = y `notElem` fullRowIndices
+    rowCount                 = length fullRowIndices
+    fullRowIndices           = filter isFullRow [1..boardHeight]
+    isFullRow r              = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
+    inRow r (V2 _ y) _       = r == y
+    shiftCoordAbove (V2 x y) =
       let offset = length . filter (< y) $ fullRowIndices
-       in (x, y - offset)
+       in V2 x (y - offset)
 
 -- | This updates game points with respect to the current
 -- _rowClears value (thus should only be used ONCE per step)
@@ -215,7 +213,7 @@ blockStopped g = isStopped (g ^. board) (g ^. block)
 isStopped :: Board -> Block -> Bool
 isStopped brd = any cStopped . coords
   where cStopped     = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
-        inRow1 (_,y) = y == 1
+        inRow1 (V2 _ y) = y == 1
 
 hardDrop :: Game -> Game
 hardDrop g = g & block  .~ hardDroppedBlock g
@@ -224,10 +222,10 @@ hardDrop g = g & block  .~ hardDroppedBlock g
 hardDroppedBlock :: Game -> Block
 hardDroppedBlock g = translateBy n Down $ g ^. block
   where n = minimum $ (subtract 1) <$> (minY : diffs)
-        diffs = [y - yo | (xo,yo) <- brdCs, (x,y) <- blkCs, xo == x, yo < y]
+        diffs = [y - yo | (V2 xo yo) <- brdCs, (V2 x y) <- blkCs, xo == x, yo < y]
         brdCs = g ^. board ^. to M.keys
         blkCs = g ^. block ^. to coords
-        minY = minimum (snd <$> blkCs)
+        minY = minimum (fmap (^. _y) blkCs)
 
 -- | Freeze current block
 freezeBlock :: Game -> Game
@@ -258,7 +256,7 @@ isOccupied = flip M.member
 
 -- | Check if coordinate is in or out of bounds
 isInBounds, isOutOfBounds :: Coord -> Bool
-isInBounds (x,y) = 1 <= x && x <= boardWidth && 1 <= y
+isInBounds (V2 x y) = 1 <= x && x <= boardWidth && 1 <= y
 isOutOfBounds = not . isInBounds
 
 -- | Gravitate current block, i.e. shift down
@@ -285,3 +283,6 @@ shuffle xs
 -- | Take predicate and input and transform to Maybe
 boolMaybe :: (a -> Bool) -> a -> Maybe a
 boolMaybe p a = if p a then Just a else Nothing
+
+v2 :: (a, a) -> V2 a
+v2 (x, y) = V2 x y
