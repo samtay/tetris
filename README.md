@@ -13,7 +13,7 @@ I have not tested Windows, but I do think it should work via dex. Please let me 
 #### github release binaries
 Here is a quick way to get the one for your OS:
 ```bash
-curl -L https://github.com/samtay/tetris/releases/download/0.1.1/tetris-`uname -s`-`uname -m` -o tetris
+curl -L https://github.com/samtay/tetris/releases/download/0.1.2/tetris-`uname -s`-`uname -m` -o tetris
 chmod +x tetris
 sudo mv tetris /usr/local/bin/
 ```
