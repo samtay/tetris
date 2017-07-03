@@ -80,6 +80,7 @@ handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = frozenGuard rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = frozenGuard rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ hardDrop
                                                                      & frozen .~ True
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
 handleEvent ui (VtyEvent (V.EvKey V.KEsc []))        = halt ui
 handleEvent ui _                                     = continue ui
@@ -102,6 +103,13 @@ handleTick ui =
                      & frozen .~ False
   where g = ui ^. game
 
+-- | Restart game at the same level
+restart :: UI -> EventM Name (Next UI)
+restart ui = do
+  let lvl = ui ^. game ^. level
+  g <- liftIO $ initGame lvl
+  continue $ ui & game .~ g
+                & frozen .~ False
 
 -- Drawing
 
@@ -189,16 +197,16 @@ drawLeaderBoard :: Game -> Widget Name
 drawLeaderBoard g = emptyWidget
 
 drawInfo :: Game -> Widget Name
-drawInfo g = hLimit 16 -- size of next piece box
+drawInfo g = hLimit 18 -- size of next piece box
   $ vBox [ drawNextShape (g ^. nextShape)
          , padTop (Pad 2) $ drawHelp
-         , padTop (Pad 2) $ drawGameOver g
+         , padTop (Pad 1) $ drawGameOver g
          ]
 
 drawNextShape :: Tetrimino -> Widget Name
 drawNextShape t = withBorderStyle BS.unicodeBold
   $ B.borderWithLabel (str "Next")
-  $ padTopBottom 1 $ padLeftRight 3
+  $ padTopBottom 1 $ padLeftRight 4
   $ vLimit 4
   $ vBox $ mkRow <$> [0,-1]
   where
@@ -217,6 +225,7 @@ drawHelp = withBorderStyle BS.unicodeBold
     , ("Down", "j, ↓")
     , ("Rotate", "k, ↑")
     , ("Drop", "space")
+    , ("Restart", "r")
     , ("Quit", "q")
     ]
 
@@ -227,7 +236,7 @@ drawKeyInfo action keys =
 
 drawGameOver :: Game -> Widget Name
 drawGameOver g = if (isGameOver g)
-                    then padLeftRight 3 $ withAttr gameOverAttr $ str "GAME OVER"
+                    then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
                     else emptyWidget
 
 theMap :: AttrMap
