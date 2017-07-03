@@ -46,15 +46,18 @@ dex install --global tetris
 tetris
 ```
 
-## screenshots
-
-#### Linux termite - tomorrow night eighties
-![linux-tomorrow-night-80s](./docs/img/linux_tomorrow_night_80s.png)
-#### Mac terminal - plain
-![mac-terminal-plain](./docs/img/mac_plain.png)
-
-## todo
-
-1. Leaderboard saved to txt file (requires adding brick viewport for name entry)
-and probably wrapping game in a ui state type
-3. Consider refactoring (Game -> a) types with State or Reader abstraction
+## usage
+The default game is run by simply executing the `tetris` command.
+If the unicode characters look a bit
+wonky in your terminal, you can also run
+```shell
+tetris --ascii-only         # uses [] as preview cell
+# or
+tetris --preview-chars 'XX' # uses custom characters as preview cell
+```
+If you always play on level `6` and want to skip the prompt, you can start the game immediately via
+```shell
+tetris --level 6
+```
+Lastly, to see the current highest score, you can run `tetris --high-score`.
+And of course, see `tetris --help` for help.
