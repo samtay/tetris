@@ -110,7 +110,7 @@ rotate' b@(Block s o@(V2 xo yo) cs)
     rotateWith dir   = b & extra %~ fmap dir
     clockwise        = (+ o) . (cwperp) . (subtract o)
     counterclockwise = (+ o) . LV.perp . (subtract o)
-    cwperp (V2 x y)  = V2 x (-y)
+    cwperp (V2 x y)  = V2 y (-x)
 
 -- | Get coordinates of entire block
 coords :: Block -> [Coord]
