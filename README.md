@@ -18,6 +18,13 @@ chmod +x tetris
 sudo mv tetris /usr/local/bin/
 ```
 
+If you are on a Linux distro other than ArchLinux, you may see an issue with these dynamically linked binaries, specifically regarding the ncurses distribution. If you see an error such as `tetris: error while loading shared libraries: libncursesw.so.6: cannot open shared object file: No such file or directory`, an easy fix is to install the ncurses version 5 and then symlink the `libncursesw.so.5` library to the missing `libncursesw.so.6` library. For example, on a debian based system,
+```bash
+sudo apt update
+sudo apt install -y libncursesw5 libncursesw5-dev
+sudo ln -s /lib/x86_64-linux-gnu/libncursesw.so.5  /lib/x86_64-linux-gnu/libncursesw.so.6
+```
+
 #### install from source
 First [get stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). Then
 ```bash
