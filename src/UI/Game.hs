@@ -7,7 +7,7 @@ module UI.Game
   ) where
 
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (void, forever)
+import Control.Monad (guard, void, forever)
 import Control.Monad.IO.Class (liftIO)
 import Prelude hiding (Left, Right)
 
@@ -40,8 +40,13 @@ data Tick = Tick
 -- | Named resources
 type Name = ()
 
-data CellLocation = InGrid | InNextShape
-data TVisual = Normal | HardDrop
+data CellLocation
+  = InGrid
+  | InNextShape
+
+data TVisual
+  = Normal
+  | HardDrop
 
 -- App definition and execution
 
@@ -152,27 +157,27 @@ drawGrid ui =
     $ withBorderStyle BS.unicodeBold
     $ B.borderWithLabel (str "Tetris")
     $ case ui ^. paused of
-        False -> vBox rows
         True  -> C.center $ str "Paused"
+        False -> vBox $ [boardHeight, boardHeight - 1 .. 1] <&> \r ->
+          foldr (<+>) emptyWidget
+            . M.filterWithKey (\(V2 _ y) _ -> r == y)
+            $ mconcat
+                [ draw Normal . Just <$> g ^. board
+                , blockMap (g ^. block)                    Normal
+                , blockMap (evalTetris hardDroppedBlock g) HardDrop
+                , emptyCellMap
+                ]
  where
-  rows =
-    [ foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
-    | r <- [boardHeight, boardHeight - 1 .. 1]
-    ]
-  inRow r (V2 _ y) _ = r == y
-  gmap    = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
-  brdMap  = draw Normal . Just <$> g ^. board
-  hrdMap  = blkMap (evalTetris hardDroppedBlock g) HardDrop
-  cBlkMap = blkMap (g ^. block) Normal
-  draw    = drawMCell (ui ^. preview) InGrid
-  g       = ui ^. game
-  blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
+  g    = ui ^. game
+  draw = drawMCell (ui ^. preview) InGrid
+  blockMap b v =
+    M.fromList $ [ (c, draw v . Just $ b ^. shape) | c <- coords b ]
 
 emptyCellMap :: Map Coord (Widget Name)
-emptyCellMap = M.fromList cws
- where
-  cws = [ ((V2 x y), ew) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
-  ew  = drawMCell Nothing InGrid Normal Nothing
+emptyCellMap =
+  let ew = drawMCell Nothing InGrid Normal Nothing
+  in  M.fromList
+        [ ((V2 x y), ew) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
 
 drawMCell
   :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
@@ -245,18 +250,12 @@ drawNextShape t =
     $   padLeftRight 4
     $   vLimit 4
     $   vBox
-    $   mkRow
-    <$> [0, -1]
- where
-  mkRow y =
-    hBox
-      $   drawMCell Nothing InNextShape Normal
-      .   cellAt
-      .   (`V2` y)
-      <$> [-2 .. 1]
-  cellAt (V2 x y) = if (V2 x y) `elem` cs then Just t else Nothing
-  blk = Block t (V2 0 0) (relCells t)
-  cs  = blk ^. to coords
+    $   [0, -1]
+    <&> \y ->
+          hBox
+            $   drawMCell Nothing InNextShape Normal
+            <$> [ t <$ guard (V2 x y `elem` coords blk) | x <- [-2 .. 1] ]
+  where blk = Block t (V2 0 0) (relCells t)
 
 drawHelp :: Widget Name
 drawHelp =
