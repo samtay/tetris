@@ -1,4 +1,4 @@
-# tetris
+# tetris [![Build Status](https://travis-ci.org/samtay/tetris.svg?branch=master)](https://travis-ci.org/samtay/tetris)
 
 A terminal interface for Tetris
 
