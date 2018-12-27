@@ -45,12 +45,13 @@ data TVisual = Normal | HardDrop
 -- App definition and execution
 
 app :: App UI Tick Name
-app = App { appDraw = drawUI
-          , appChooseCursor = neverShowCursor
-          , appHandleEvent = handleEvent
-          , appStartEvent = return
-          , appAttrMap = const theMap
-          }
+app = App
+  { appDraw         = drawUI
+  , appChooseCursor = neverShowCursor
+  , appHandleEvent  = handleEvent
+  , appStartEvent   = return
+  , appAttrMap      = const theMap
+  }
 
 playGame :: Int -> Maybe String -> IO Game
 playGame lvl mp = do
@@ -70,21 +71,21 @@ levelToDelay n = floor $ 400000 * (0.85 :: Double) ^ (2 * n)
 -- Handling events
 
 handleEvent :: UI -> BrickEvent Name Tick -> EventM Name (Next UI)
-handleEvent ui (AppEvent Tick)                       = handleTick ui
-handleEvent ui (VtyEvent (V.EvKey V.KRight []))      = exec (shift Right) ui
-handleEvent ui (VtyEvent (V.EvKey V.KLeft []))       = exec (shift Left) ui
-handleEvent ui (VtyEvent (V.EvKey V.KDown []))       = exec (shift Down) ui
+handleEvent ui (AppEvent Tick                      ) = handleTick ui
+handleEvent ui (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right) ui
+handleEvent ui (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left) ui
+handleEvent ui (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down) ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right) ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left) ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down) ui
-handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = exec rotate ui
+handleEvent ui (VtyEvent (V.EvKey V.KUp         [])) = exec rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ execTetris hardDrop
-                                                                     & locked .~ True
+handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) =
+  continue $ ui & game %~ execTetris hardDrop & locked .~ True
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
-handleEvent ui (VtyEvent (V.EvKey V.KEsc []))        = halt ui
-handleEvent ui _                                     = continue ui
+handleEvent ui (VtyEvent (V.EvKey V.KEsc        [])) = halt ui
+handleEvent ui _ = continue ui
 
 -- | This common execution function is used for all game input except hard
 -- drop. If locked (from hard drop) do nothing, else execute the state
@@ -117,44 +118,48 @@ restart ui = do
 
 drawUI :: UI -> [Widget Name]
 drawUI ui =
-  [ C.vCenter $ vLimit 22 $ hBox [ padLeft Max $ padRight (Pad 2) $ drawStats (ui ^. game)
-                                 , drawGrid ui
-                                 , padRight Max $ padLeft (Pad 2) $ drawInfo (ui ^. game)
-                                 ]
+  [ C.vCenter $ vLimit 22 $ hBox
+      [ padLeft Max $ padRight (Pad 2) $ drawStats (ui ^. game)
+      , drawGrid ui
+      , padRight Max $ padLeft (Pad 2) $ drawInfo (ui ^. game)
+      ]
   ]
 
 drawGrid :: UI -> Widget Name
-drawGrid ui = hLimit 22
-  $ withBorderStyle BS.unicodeBold
-  $ B.borderWithLabel (str "Tetris")
-  $ vBox rows
-  where
-    rows = [foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
-             | r <- [boardHeight,boardHeight-1..1]
-           ]
-    inRow r (V2 _ y) _ = r == y
-    gmap = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
-    brdMap = draw Normal . Just <$> g ^. board
-    hrdMap = blkMap (evalTetris hardDroppedBlock g) HardDrop
-    cBlkMap = blkMap (g ^. block) Normal
-    blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
-    draw = drawMCell (ui ^. preview) InGrid
-    g = ui ^. game
+drawGrid ui =
+  hLimit 22
+    $ withBorderStyle BS.unicodeBold
+    $ B.borderWithLabel (str "Tetris")
+    $ vBox rows
+ where
+  rows =
+    [ foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
+    | r <- [boardHeight, boardHeight - 1 .. 1]
+    ]
+  inRow r (V2 _ y) _ = r == y
+  gmap    = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
+  brdMap  = draw Normal . Just <$> g ^. board
+  hrdMap  = blkMap (evalTetris hardDroppedBlock g) HardDrop
+  cBlkMap = blkMap (g ^. block) Normal
+  draw    = drawMCell (ui ^. preview) InGrid
+  g       = ui ^. game
+  blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
 
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap = M.fromList cws
-  where
-    cws = [((V2 x y), ew) | x <- [1..boardWidth], y <- [1..boardHeight]]
-    ew = drawMCell Nothing InGrid Normal Nothing
+ where
+  cws = [ ((V2 x y), ew) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
+  ew  = drawMCell Nothing InGrid Normal Nothing
 
-drawMCell :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
-drawMCell _ InGrid _ Nothing      = withAttr emptyAttr cw
-drawMCell _ InNextShape _ Nothing = withAttr emptyAttr ecw
-drawMCell mp _ v (Just t)         = drawCell mp t v
+drawMCell
+  :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
+drawMCell _  InGrid      _ Nothing  = withAttr emptyAttr cw
+drawMCell _  InNextShape _ Nothing  = withAttr emptyAttr ecw
+drawMCell mp _           v (Just t) = drawCell mp t v
 
-drawCell :: Maybe String -> Tetrimino -> TVisual ->  Widget Name
-drawCell _ t Normal          = withAttr (tToAttr t) cw
-drawCell Nothing t HardDrop  = withAttr (tToAttrH t) hcw
+drawCell :: Maybe String -> Tetrimino -> TVisual -> Widget Name
+drawCell _        t Normal   = withAttr (tToAttr t) cw
+drawCell Nothing  t HardDrop = withAttr (tToAttrH t) hcw
 drawCell (Just p) t HardDrop = withAttr (tToAttrH t) (str p)
 
 tToAttr :: Tetrimino -> AttrName
@@ -185,82 +190,95 @@ hcw :: Widget Name
 hcw = str "◤◢"
 
 drawStats :: Game -> Widget Name
-drawStats g = hLimit 22
-  $ withBorderStyle BS.unicodeBold
-  $ B.borderWithLabel (str "Stats")
-  $ vBox [ drawStat "Score" $ g ^. score
-         , padTop (Pad 1) $ drawStat "Level" $ g ^. level
-         , drawLeaderBoard g
-         ]
+drawStats g =
+  hLimit 22
+    $ withBorderStyle BS.unicodeBold
+    $ B.borderWithLabel (str "Stats")
+    $ vBox
+        [ drawStat "Score" $ g ^. score
+        , padTop (Pad 1) $ drawStat "Level" $ g ^. level
+        , drawLeaderBoard g
+        ]
 
 drawStat :: String -> Int -> Widget Name
-drawStat s n = padLeftRight 1
-  $ str s <+> (padLeft Max $ str $ show n)
+drawStat s n = padLeftRight 1 $ str s <+> (padLeft Max $ str $ show n)
 
 drawLeaderBoard :: Game -> Widget Name
 drawLeaderBoard _ = emptyWidget
 
 drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 18 -- size of next piece box
-  $ vBox [ drawNextShape (g ^. nextShape)
-         , padTop (Pad 2) $ drawHelp
-         , padTop (Pad 1) $ drawGameOver g
-         ]
+  $ vBox
+    [ drawNextShape (g ^. nextShape)
+    , padTop (Pad 2) $ drawHelp
+    , padTop (Pad 1) $ drawGameOver g
+    ]
 
 drawNextShape :: Tetrimino -> Widget Name
-drawNextShape t = withBorderStyle BS.unicodeBold
-  $ B.borderWithLabel (str "Next")
-  $ padTopBottom 1 $ padLeftRight 4
-  $ vLimit 4
-  $ vBox $ mkRow <$> [0,-1]
-  where
-    mkRow y = hBox $ drawMCell Nothing InNextShape Normal . cellAt . (`V2` y) <$> [-2..1]
-    cellAt (V2 x y) = if (V2 x y) `elem` cs then Just t else Nothing
-    blk = Block t (V2 0 0) (relCells t)
-    cs = blk ^. to coords
+drawNextShape t =
+  withBorderStyle BS.unicodeBold
+    $   B.borderWithLabel (str "Next")
+    $   padTopBottom 1
+    $   padLeftRight 4
+    $   vLimit 4
+    $   vBox
+    $   mkRow
+    <$> [0, -1]
+ where
+  mkRow y =
+    hBox
+      $   drawMCell Nothing InNextShape Normal
+      .   cellAt
+      .   (`V2` y)
+      <$> [-2 .. 1]
+  cellAt (V2 x y) = if (V2 x y) `elem` cs then Just t else Nothing
+  blk = Block t (V2 0 0) (relCells t)
+  cs  = blk ^. to coords
 
 drawHelp :: Widget Name
-drawHelp = withBorderStyle BS.unicodeBold
-  $ B.borderWithLabel (str "Help")
-  $ padTopBottom 1
-  $ vBox $ map (uncurry drawKeyInfo)
-  $ [ ("Left", "h, ←")
-    , ("Right", "l, →")
-    , ("Down", "j, ↓")
-    , ("Rotate", "k, ↑")
-    , ("Drop", "space")
-    , ("Restart", "r")
-    , ("Quit", "q")
-    ]
+drawHelp =
+  withBorderStyle BS.unicodeBold
+    $ B.borderWithLabel (str "Help")
+    $ padTopBottom 1
+    $ vBox
+    $ map (uncurry drawKeyInfo)
+    $ [ ("Left"   , "h, ←")
+      , ("Right"  , "l, →")
+      , ("Down"   , "j, ↓")
+      , ("Rotate" , "k, ↑")
+      , ("Drop"   , "space")
+      , ("Restart", "r")
+      , ("Quit"   , "q")
+      ]
 
 drawKeyInfo :: String -> String -> Widget Name
 drawKeyInfo action keys =
   (padRight Max $ padLeft (Pad 1) $ str action)
-  <+> (padLeft Max $ padRight (Pad 1) $ str keys)
+    <+> (padLeft Max $ padRight (Pad 1) $ str keys)
 
 drawGameOver :: Game -> Widget Name
-drawGameOver g = if (isGameOver g)
-                    then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
-                    else emptyWidget
+drawGameOver g =
+  if (isGameOver g)
+  then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
+  else emptyWidget
 
 theMap :: AttrMap
-theMap = attrMap V.defAttr
-  [ (iAttr, tToColor I `on` tToColor I)
-  , (oAttr, tToColor O `on` tToColor O)
-  , (tAttr, tToColor T `on` tToColor T)
-  , (sAttr, tToColor S `on` tToColor S)
-  , (zAttr, tToColor Z `on` tToColor Z)
-  , (jAttr, tToColor J `on` tToColor J)
-  , (lAttr, tToColor L `on` tToColor L)
-  -- attributes for hard drop preview (would be VERY clean if I could figure out how to
-  -- query for default background color.. alas
-  , (ihAttr, fg $ tToColor I)
-  , (ohAttr, fg $ tToColor O)
-  , (thAttr, fg $ tToColor T)
-  , (shAttr, fg $ tToColor S)
-  , (zhAttr, fg $ tToColor Z)
-  , (jhAttr, fg $ tToColor J)
-  , (lhAttr, fg $ tToColor L)
+theMap = attrMap
+  V.defAttr
+  [ (iAttr       , tToColor I `on` tToColor I)
+  , (oAttr       , tToColor O `on` tToColor O)
+  , (tAttr       , tToColor T `on` tToColor T)
+  , (sAttr       , tToColor S `on` tToColor S)
+  , (zAttr       , tToColor Z `on` tToColor Z)
+  , (jAttr       , tToColor J `on` tToColor J)
+  , (lAttr       , tToColor L `on` tToColor L)
+  , (ihAttr      , fg $ tToColor I)
+  , (ohAttr      , fg $ tToColor O)
+  , (thAttr      , fg $ tToColor T)
+  , (shAttr      , fg $ tToColor S)
+  , (zhAttr      , fg $ tToColor Z)
+  , (jhAttr      , fg $ tToColor J)
+  , (lhAttr      , fg $ tToColor L)
   , (gameOverAttr, fg V.red `V.withStyle` V.bold)
   ]
 
