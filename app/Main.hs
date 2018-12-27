@@ -7,14 +7,13 @@ import System.Exit (exitSuccess)
 import System.IO (readFile, writeFile)
 import Text.Read (readMaybe)
 
-import Tetris (Game(..))
-import UI.PickLevel (pickLevel)
-import UI.Game (playGame)
-
 import Options.Applicative
 import qualified System.Directory as D
 import System.FilePath ((</>))
-import qualified System.FilePath as F
+
+import Tetris (Game(..))
+import UI.PickLevel (pickLevel)
+import UI.Game (playGame)
 
 data Opts = Opts
   { hardDrop :: Maybe HardDropOpt

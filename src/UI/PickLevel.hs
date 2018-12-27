@@ -4,8 +4,6 @@ module UI.PickLevel
 
 import System.Exit (exitSuccess)
 
-import Tetris
-
 import Brick
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS

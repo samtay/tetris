@@ -1,5 +1,7 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Tetris
   (
   -- Game state modifiers
@@ -8,38 +10,40 @@ module Tetris
   , shift
   , rotate
   , hardDrop
+  -- Game state handlers
+  , execTetris
+  , evalTetris
   -- Game state queries
   , isGameOver
   , hardDroppedBlock
   , coords
   -- Types
   , Block(..)
-  , Coord(..)
+  , Coord
   , Direction(..)
   , Game(..)
   , Tetrimino(..)
+  , Tetris
   -- Lenses
   , block, board, level, nextShape, score, shape
   -- Constants
   , boardHeight, boardWidth, relCells
   ) where
 
+import Prelude hiding (Left, Right)
+import Control.Applicative ((<|>))
+import Control.Monad (forM_, mfilter, when, (<=<))
+import Control.Monad.IO.Class (MonadIO(..), liftIO)
+
+import Control.Monad.Trans.State (StateT(..), gets, evalStateT, execStateT)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Sequence (ViewL(..), ViewR(..), (<|), (|>), (><))
+import Data.Sequence (Seq(..), (><))
 import qualified Data.Sequence as Seq
-import Lens.Micro
-import Lens.Micro.TH
-import Linear.V2 (V2(..), _x, _y)
+import Control.Lens hiding (Empty)
+import Linear.V2 (V2(..), _y)
 import qualified Linear.V2 as LV
 import System.Random (getStdRandom, randomR)
-
-import Prelude hiding (Left, Right)
-import Control.Monad (mfilter)
-import Data.Bool (bool)
-import Data.Maybe (fromMaybe)
-import Data.Monoid (First(..))
-
 -- Types and instances
 
 -- | Tetris shape types
@@ -77,8 +81,16 @@ data Game = Game
   , _score        :: Int
   , _board        :: Board
   } deriving (Eq, Show)
-
 makeLenses ''Game
+
+type TetrisT = StateT Game
+type Tetris a = forall m. (Monad m) => TetrisT m a
+
+evalTetris :: Tetris a -> Game -> a
+evalTetris m = runIdentity . evalStateT m
+
+execTetris :: Tetris a -> Game -> Game
+execTetris m = runIdentity . execStateT m
 
 -- Translate class for direct translations, without concern for boundaries
 -- 'shift' concerns safe translations with boundaries
@@ -123,8 +135,8 @@ startOrigin = V2 6 22
 -- | Rotate block counter clockwise about origin
 -- *Note*: Strict unsafe rotation not respecting boundaries
 -- Safety can only be assured within Game context
-rotate' :: Block -> Block
-rotate' b@(Block s o@(V2 xo yo) cs)
+rotateRaw :: Block -> Block
+rotateRaw b@(Block s o@(V2 xo yo) cs)
   | -- O doesn't need rotation
     s == O                             = b
   | -- I only has two orientations
@@ -146,11 +158,9 @@ coords b = b ^. origin : b ^. extra
 -- before next bag (random permutation of 4*each tetrimino) is created. If input is empty,
 -- generates new bag, otherwise just unshifts the first value and returns pair.
 bagFourTetriminoEach :: Seq.Seq Tetrimino -> IO (Tetrimino, Seq.Seq Tetrimino)
-bagFourTetriminoEach = go . Seq.viewl
- where
-  go (t :< ts) = pure (t, ts)
-  go EmptyL    = freshList >>= bagFourTetriminoEach
-  freshList = shuffle . Seq.fromList . take 28 . cycle $ [(I) ..]
+bagFourTetriminoEach (t :<| ts) = pure (t, ts)
+bagFourTetriminoEach Empty =
+  bagFourTetriminoEach <=< shuffle . Seq.fromList . take 28 $ cycle [(I) ..]
 
 -- | Initialize a game with a given level
 initGame :: Int -> IO Game
@@ -170,127 +180,139 @@ initGame lvl = do
 isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
-timeStep :: Game -> IO Game
-timeStep g = if blockStopped g
-  then nextBlock . updateScore . clearFullRows . freezeBlock $ g
-  else pure . gravitate $ g
+-- | The main game execution, this is executed at each discrete time step
+timeStep :: MonadIO m => TetrisT m ()
+timeStep = do
+  gets blockStopped >>= \case
+    False -> gravitate
+    True -> do
+      freezeBlock
+      cleared <- clearFullRows
+      addToRowClears cleared
+      updateScore
+      nextBlock
 
--- TODO check if mapKeysMonotonic works
-clearFullRows :: Game -> Game
-clearFullRows g =
-  g & board %~ clearBoard
-    & rowClears %~ (addToRowClears rowCount)
- where
-  clearBoard = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
-  notInFullRow (V2 _ y) _ = y `notElem` fullRowIndices
-  rowCount       = length fullRowIndices
-  fullRowIndices = filter isFullRow [1 .. boardHeight]
-  isFullRow r = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
-  inRow r (V2 _ y) _ = r == y
-  shiftCoordAbove (V2 x y) =
-    let offset = length . filter (< y) $ fullRowIndices in V2 x (y - offset)
+-- | Gravitate current block, i.e. shift down
+gravitate :: Tetris ()
+gravitate = shift Down
+
+-- | If necessary: clear full rows and return the count
+clearFullRows :: Tetris Int
+clearFullRows = do
+  brd <- use board
+  let rowSize r = length $ M.filterWithKey (\(V2 _ y) _ -> r == y) brd
+      fullRows = filter (\r -> boardWidth == rowSize r) [1 .. boardHeight]
+  -- Clear cells in full rows
+  modifying board $ M.filterWithKey $ \(V2 _ y) _ -> y `notElem` fullRows
+  -- Shift cells above full rows
+  modifying board $ M.mapKeysMonotonic $ over _y $ \y ->
+    y - (length $ filter (< y) fullRows)
+  return $ length fullRows
+
+-- | Empties row on 0, otherwise appends value (just keeps consecutive information)
+addToRowClears :: Int -> Tetris ()
+addToRowClears 0 = rowClears .= mempty
+addToRowClears n = rowClears %= (|> n)
 
 -- | This updates game points with respect to the current
 -- _rowClears value (thus should only be used ONCE per step)
 --
 -- Note I'm keeping rowClears as a sequence in case I want to award
--- more points for back to back clears, right now the scoring is more simple
-updateScore :: Game -> Game
-updateScore g = g & score %~ (+ newPoints)
- where
-  newPoints =
-    (1 + g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
-  points 0 = 0
-  points 1 = 40
-  points 2 = 100
-  points 3 = 300
-  points n = 800
-
--- | Empties row on 0, otherwise appends value (just keeps consecutive information)
-addToRowClears :: Int -> Seq.Seq Int -> Seq.Seq Int
-addToRowClears 0 _  = mempty
-addToRowClears n rs = rs |> n
-
--- | Get last value of sequence or 0 if empty
-latestOrZero :: Seq.Seq Int -> Int
-latestOrZero = go . Seq.viewr
- where
-  go EmptyR   = 0
-  go (_ :> n) = n
+-- more points for back to back clears, right now the scoring is more simple,
+-- but you do get more points for more rows cleared at once.
+updateScore :: Tetris ()
+updateScore = do
+  multiplier <- (1 +) <$> use level
+  clears <- latestOrZero <$> use rowClears
+  let newPoints = multiplier * points clears
+  score %= (+ newPoints)
+  where
+    -- Translate row clears to points
+    points 0 = 0
+    points 1 = 40
+    points 2 = 100
+    points 3 = 300
+    points _ = 800
+    -- | Get last value of sequence or 0 if empty
+    latestOrZero :: Seq.Seq Int -> Int
+    latestOrZero Empty     = 0
+    latestOrZero (_ :|> n) = n
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
-rotate :: Game -> Game
-rotate g = g & block .~ nextB
- where
-  nextB     = fromMaybe blk $ getFirst . mconcat $ First <$> bs
-  bs        = map ($ blk) safeFuncs
-  safeFuncs = map (mkSafe .) funcs
-  mkSafe    = mfilter (isValidBlockPosition brd) . pure
-  funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
-  blk       = g ^. block
-  brd       = g ^. board
+rotate :: Tetris ()
+rotate = do
+  blk <- use block
+  brd <- use board
+  let mblk = foldr (<|>) Nothing
+        $   mfilter (isValidBlockPosition brd)
+        .   pure
+        .   ($ blk)
+        <$> [ rotateRaw
+            , rotateRaw . translate Left
+            , rotateRaw . translate Right
+            ]
+  forM_ mblk $ assign block
 
 blockStopped :: Game -> Bool
 blockStopped g = isStopped (g ^. board) (g ^. block)
 
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
-isStopped brd = any cStopped . coords
+isStopped brd = any stopped . coords
  where
-  cStopped = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
-  inRow1 (V2 _ y) = y == 1
+  stopped = (||) <$> atBottom <*> (`M.member` brd) . (translate Down)
+  atBottom = (== 1) . (view _y)
 
-hardDrop :: Game -> Game
-hardDrop g = g & block .~ hardDroppedBlock g
+hardDrop :: Tetris ()
+hardDrop = hardDroppedBlock >>= assign block
 
-hardDroppedBlock :: Game -> Block
-hardDroppedBlock g = translateBy n Down $ g ^. block
- where
-  n     = minimum $ (subtract 1) <$> (minY : diffs)
-  diffs = [ y - yo | (V2 xo yo) <- brdCs, (V2 x y) <- blkCs, xo == x, yo < y ]
-  brdCs = g ^. board ^. to M.keys
-  blkCs = g ^. block ^. to coords
-  minY  = minimum (fmap (^. _y) blkCs)
+hardDroppedBlock :: Tetris Block
+hardDroppedBlock = do
+  boardCoords <- M.keys <$> use board
+  blockCoords <- coords <$> use block
+  let diffs =
+        [ y - yo
+        | (V2 xo yo) <- boardCoords
+        , (V2 x  y ) <- blockCoords
+        , xo == x
+        , yo < y
+        ]
+      minY = minimum $ (view _y) <$> blockCoords
+      dist = minimum $ (subtract 1) <$> (minY : diffs)
+  translateBy dist Down <$> use block
 
 -- | Freeze current block
-freezeBlock :: Game -> Game
-freezeBlock g = g & board %~ (M.union blkMap)
- where
-  blk    = g ^. block
-  blkMap = M.fromList $ [ (c, blk ^. shape) | c <- blk ^. to coords ]
+freezeBlock :: Tetris ()
+freezeBlock = do
+  blk <- use block
+  modifying board $ M.union $ M.fromList [ (c, _shape blk) | c <- coords blk ]
 
 -- | Replace block with next block
-nextBlock :: Game -> IO Game
-nextBlock g = do
-  (t, ts) <- bagFourTetriminoEach (g ^. nextShapeBag)
-  pure
-    $ g
-    & block .~ initBlock (g ^. nextShape)
-    & nextShape .~ t
-    & nextShapeBag .~ ts
+nextBlock :: MonadIO m => TetrisT m ()
+nextBlock = do
+  bag <- use nextShapeBag
+  (t, ts) <- liftIO $ bagFourTetriminoEach bag
+  use nextShape >>= \s -> block .= initBlock s
+  nextShape .= t
+  nextShapeBag .= ts
 
 -- | Try to shift current block; if shifting not possible, leave block where it is
-shift :: Direction -> Game -> Game
-shift d g = g & block %~ shiftBlock
- where
-  shiftBlock b = if isValidBlockPosition (g ^. board) (translate d b)
-    then translate d b
-    else b
+shift :: Direction -> Tetris ()
+shift dir = do
+  brd <- use board
+  blk <- use block
+  let candidate = translate dir blk
+  when (isValidBlockPosition brd candidate) $
+    block .= candidate
 
 -- | Check if coordinate is already occupied or free in board
-isFree, isOccupied :: Board -> Coord -> Bool
+isFree :: Board -> Coord -> Bool
 isFree = flip M.notMember
-isOccupied = flip M.member
 
 -- | Check if coordinate is in or out of bounds
-isInBounds, isOutOfBounds :: Coord -> Bool
+isInBounds :: Coord -> Bool
 isInBounds (V2 x y) = 1 <= x && x <= boardWidth && 1 <= y
-isOutOfBounds = not . isInBounds
-
--- | Gravitate current block, i.e. shift down
-gravitate :: Game -> Game
-gravitate = shift Down
 
 -- | Checks if block's potential new location is valid
 isValidBlockPosition :: Board -> Block -> Bool
@@ -305,8 +327,7 @@ shuffle xs
   | null xs = mempty
   | otherwise = do
     randomPosition <- getStdRandom (randomR (0, length xs - 1))
-    let (left, right) = Seq.splitAt randomPosition xs
-        (y :< ys)     = Seq.viewl right
+    let (left, (y :<| ys)) = Seq.splitAt randomPosition xs
     fmap (y <|) (shuffle $ left >< ys)
 
 v2 :: (a, a) -> V2 a

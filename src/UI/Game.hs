@@ -1,5 +1,6 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module UI.Game
   ( playGame
@@ -10,19 +11,19 @@ import Control.Monad (void, forever)
 import Control.Monad.IO.Class (liftIO)
 import Prelude hiding (Left, Right)
 
-import Tetris
-
 import Brick hiding (Down)
 import Brick.BChan
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
+import Control.Lens hiding (preview, op)
+import Control.Monad.Trans.State
 import qualified Graphics.Vty as V
 import Data.Map (Map)
 import qualified Data.Map as M
-import Lens.Micro
-import Lens.Micro.TH (makeLenses)
-import Linear.V2 (V2(..), _x, _y)
+import Linear.V2 (V2(..))
+
+import Tetris
 
 data UI = UI
   { _game    :: Game         -- ^ tetris game
@@ -55,7 +56,7 @@ playGame :: Int -> Maybe String -> IO Game
 playGame lvl mp = do
   let delay = levelToDelay lvl
   chan <- newBChan 10
-  forkIO $ forever $ do
+  void . forkIO $ forever $ do
     writeBChan chan Tick
     threadDelay delay
   initialGame <- initGame lvl
@@ -64,44 +65,45 @@ playGame lvl mp = do
   return $ ui ^. game
 
 levelToDelay :: Int -> Int
-levelToDelay n = floor $ 400000 * 0.85 ^ (2 * n)
+levelToDelay n = floor $ 400000 * (0.85 :: Double) ^ (2 * n)
 
 -- Handling events
 
 handleEvent :: UI -> BrickEvent Name Tick -> EventM Name (Next UI)
 handleEvent ui (AppEvent Tick)                       = handleTick ui
-handleEvent ui (VtyEvent (V.EvKey V.KRight []))      = frozenGuard (shift Right) ui
-handleEvent ui (VtyEvent (V.EvKey V.KLeft []))       = frozenGuard (shift Left) ui
-handleEvent ui (VtyEvent (V.EvKey V.KDown []))       = frozenGuard (shift Down) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'l') [])) = frozenGuard (shift Right) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'h') [])) = frozenGuard (shift Left) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = frozenGuard (shift Down) ui
-handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = frozenGuard rotate ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = frozenGuard rotate ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ hardDrop
+handleEvent ui (VtyEvent (V.EvKey V.KRight []))      = exec (shift Right) ui
+handleEvent ui (VtyEvent (V.EvKey V.KLeft []))       = exec (shift Left) ui
+handleEvent ui (VtyEvent (V.EvKey V.KDown []))       = exec (shift Down) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left) ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down) ui
+handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = exec rotate ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ execTetris hardDrop
                                                                      & frozen .~ True
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
 handleEvent ui (VtyEvent (V.EvKey V.KEsc []))        = halt ui
 handleEvent ui _                                     = continue ui
 
--- | If frozen, return same UI, else execute game op
-frozenGuard :: (Game -> Game) -> UI -> EventM Name (Next UI)
-frozenGuard op ui = continue
-  $ if ui ^. frozen
-       then ui
-       else ui & game %~ op
+-- | This common execution function is used for all game input except hard
+-- drop. If frozen (from hard drop) do nothing, else execute the state
+-- computation and unfreeze.
+exec :: Tetris () -> UI -> EventM Name (Next UI)
+exec op ui = continue
+  $ if ui ^. frozen || ui ^. game . to isGameOver
+    then ui
+    else ui & game %~ execTetris op
 
 -- | Handles time steps, does nothing if game is over
 handleTick :: UI -> EventM Name (Next UI)
 handleTick ui =
-  if isGameOver g
-     then continue ui
-     else do
-       g' <- liftIO (timeStep g)
-       continue $ ui & game .~ g'
-                     & frozen .~ False
-  where g = ui ^. game
+  if ui ^. game . to isGameOver
+  then continue ui
+  else do
+    next <- execStateT timeStep $ ui ^. game
+    continue $ ui & game .~ next
+                  & frozen .~ False
 
 -- | Restart game at the same level
 restart :: UI -> EventM Name (Next UI)
@@ -133,7 +135,7 @@ drawGrid ui = hLimit 22
     inRow r (V2 _ y) _ = r == y
     gmap = mconcat [brdMap, cBlkMap, hrdMap, emptyCellMap]
     brdMap = draw Normal . Just <$> g ^. board
-    hrdMap = blkMap (hardDroppedBlock g) HardDrop
+    hrdMap = blkMap (evalTetris hardDroppedBlock g) HardDrop
     cBlkMap = blkMap (g ^. block) Normal
     blkMap b v = M.fromList . map (, draw v . Just $ b ^. shape) $ coords b
     draw = drawMCell (ui ^. preview) InGrid
@@ -155,6 +157,7 @@ drawCell _ t Normal          = withAttr (tToAttr t) cw
 drawCell Nothing t HardDrop  = withAttr (tToAttrH t) hcw
 drawCell (Just p) t HardDrop = withAttr (tToAttrH t) (str p)
 
+tToAttr :: Tetrimino -> AttrName
 tToAttr I = iAttr
 tToAttr O = oAttr
 tToAttr T = tAttr
@@ -163,6 +166,7 @@ tToAttr Z = zAttr
 tToAttr J = jAttr
 tToAttr L = lAttr
 
+tToAttrH :: Tetrimino -> AttrName
 tToAttrH I = ihAttr
 tToAttrH O = ohAttr
 tToAttrH T = thAttr
@@ -194,7 +198,7 @@ drawStat s n = padLeftRight 1
   $ str s <+> (padLeft Max $ str $ show n)
 
 drawLeaderBoard :: Game -> Widget Name
-drawLeaderBoard g = emptyWidget
+drawLeaderBoard _ = emptyWidget
 
 drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 18 -- size of next piece box
