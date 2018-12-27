@@ -35,6 +35,7 @@ import qualified Linear.V2 as LV
 import System.Random (getStdRandom, randomR)
 
 import Prelude hiding (Left, Right)
+import Control.Monad (mfilter)
 import Data.Bool (bool)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (First(..))
@@ -225,7 +226,7 @@ rotate g = g & block .~ nextB
   nextB     = fromMaybe blk $ getFirst . mconcat $ First <$> bs
   bs        = map ($ blk) safeFuncs
   safeFuncs = map (mkSafe .) funcs
-  mkSafe    = boolMaybe (isValidBlockPosition brd)
+  mkSafe    = mfilter (isValidBlockPosition brd) . pure
   funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
   blk       = g ^. block
   brd       = g ^. board
@@ -307,10 +308,6 @@ shuffle xs
     let (left, right) = Seq.splitAt randomPosition xs
         (y :< ys)     = Seq.viewl right
     fmap (y <|) (shuffle $ left >< ys)
-
--- | Take predicate and input and transform to Maybe
-boolMaybe :: (a -> Bool) -> a -> Maybe a
-boolMaybe p a = if p a then Just a else Nothing
 
 v2 :: (a, a) -> V2 a
 v2 (x, y) = V2 x y

@@ -1,8 +1,6 @@
 name:                tetris
 version:             0.1.2.0
--- synopsis:
--- description:
-homepage:            https://github.com/SamTay/tetris#readme
+homepage:            https://github.com/samtay/tetris#readme
 license:             BSD3
 license-file:        LICENSE
 author:              Sam Tay
@@ -26,7 +24,6 @@ library
                      , linear
                      , random
                      , vty
-
   default-language:    Haskell2010
 
 executable tetris
