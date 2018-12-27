@@ -80,13 +80,13 @@ initBlock :: Tetrimino -> Block
 initBlock t = Block t startOrigin . fmap (+ startOrigin) . relCells $ t
 
 relCells :: Tetrimino -> [Coord]
-relCells I = map v2 [(-2,0), (-1,0), (1,0)]
-relCells O = map v2 [(-1,0), (-1,-1), (0,-1)]
-relCells S = map v2 [(-1,-1), (0,-1), (1,0)]
-relCells Z = map v2 [(-1,0), (0,-1), (1,-1)]
-relCells L = map v2 [(-1,-1), (-1,0), (1,0)]
-relCells J = map v2 [(-1,0), (1,0), (1,-1)]
-relCells T = map v2 [(-1,0), (0,-1), (1,0)]
+relCells I = map v2 [(-2, 0), (-1, 0), (1, 0)]
+relCells O = map v2 [(-1, 0), (-1, -1), (0, -1)]
+relCells S = map v2 [(-1, -1), (0, -1), (1, 0)]
+relCells Z = map v2 [(-1, 0), (0, -1), (1, -1)]
+relCells L = map v2 [(-1, -1), (-1, 0), (1, 0)]
+relCells J = map v2 [(-1, 0), (1, 0), (1, -1)]
+relCells T = map v2 [(-1, 0), (0, -1), (1, 0)]
 
 -- | Visible, active board size
 boardWidth, boardHeight :: Int
@@ -102,15 +102,16 @@ startOrigin = V2 6 22
 -- Safety can only be assured within Game context
 rotate' :: Block -> Block
 rotate' b@(Block s o@(V2 xo yo) cs)
-  | s == O = b -- O doesn't need rotation
-  | s == I && V2 xo (yo+1) `elem` cs = rotateWith clockwise -- I only has two orientations
-  | otherwise = rotateWith counterclockwise
-  where
-    rotateWith :: (Coord -> Coord) -> Block
-    rotateWith dir   = b & extra %~ fmap dir
-    clockwise        = (+ o) . (cwperp) . (subtract o)
-    counterclockwise = (+ o) . LV.perp . (subtract o)
-    cwperp (V2 x y)  = V2 y (-x)
+  | -- O doesn't need rotation
+    s == O                             = b
+  | -- I only has two orientations
+    s == I && V2 xo (yo + 1) `elem` cs = rotateWith clockwise
+  | otherwise                          = rotateWith counterclockwise
+ where
+  clockwise        = (+ o) . (cwperp) . (subtract o)
+  counterclockwise = (+ o) . LV.perp . (subtract o)
+  rotateWith dir = b & extra %~ fmap dir
+  cwperp (V2 x y) = V2 y (-x)
 
 -- | Get coordinates of entire block
 coords :: Block -> [Coord]
@@ -123,48 +124,48 @@ coords b = b ^. origin : b ^. extra
 -- generates new bag, otherwise just unshifts the first value and returns pair.
 bagFourTetriminoEach :: Seq.Seq Tetrimino -> IO (Tetrimino, Seq.Seq Tetrimino)
 bagFourTetriminoEach = go . Seq.viewl
-  where
-    go (t :< ts) = pure (t, ts)
-    go EmptyL = freshList >>= bagFourTetriminoEach
-    freshList = shuffle . Seq.fromList . take 28 . cycle $ [(I)..]
+ where
+  go (t :< ts) = pure (t, ts)
+  go EmptyL    = freshList >>= bagFourTetriminoEach
+  freshList = shuffle . Seq.fromList . take 28 . cycle $ [(I) ..]
 
 -- | Initialize a game with a given level
-initGame :: Int ->  IO Game
+initGame :: Int -> IO Game
 initGame lvl = do
   (s1, bag1) <- bagFourTetriminoEach mempty
   (s2, bag2) <- bagFourTetriminoEach bag1
-  pure $
-    Game { _level = lvl
-         , _block = initBlock s1
-         , _nextShape = s2
-         , _nextShapeBag = bag2
-         , _score = 0
-         , _rowClears = mempty
-         , _board = mempty }
+  pure $ Game
+    { _level        = lvl
+    , _block        = initBlock s1
+    , _nextShape    = s2
+    , _nextShapeBag = bag2
+    , _score        = 0
+    , _rowClears    = mempty
+    , _board        = mempty
+    }
 
 isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
 
 timeStep :: Game -> IO Game
-timeStep g =
-  if blockStopped g
-     then nextBlock . updateScore . clearFullRows . freezeBlock $ g
-     else pure . gravitate $ g
+timeStep g = if blockStopped g
+  then nextBlock . updateScore . clearFullRows . freezeBlock $ g
+  else pure . gravitate $ g
 
 -- TODO check if mapKeysMonotonic works
 clearFullRows :: Game -> Game
-clearFullRows g = g & board %~ clearBoard
-                    & rowClears %~ (addToRowClears rowCount)
-  where
-    clearBoard               = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
-    notInFullRow (V2 _ y) _  = y `notElem` fullRowIndices
-    rowCount                 = length fullRowIndices
-    fullRowIndices           = filter isFullRow [1..boardHeight]
-    isFullRow r              = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
-    inRow r (V2 _ y) _       = r == y
-    shiftCoordAbove (V2 x y) =
-      let offset = length . filter (< y) $ fullRowIndices
-       in V2 x (y - offset)
+clearFullRows g =
+  g & board %~ clearBoard
+    & rowClears %~ (addToRowClears rowCount)
+ where
+  clearBoard = M.mapKeys shiftCoordAbove . M.filterWithKey notInFullRow
+  notInFullRow (V2 _ y) _ = y `notElem` fullRowIndices
+  rowCount       = length fullRowIndices
+  fullRowIndices = filter isFullRow [1 .. boardHeight]
+  isFullRow r = boardWidth == (length . M.filterWithKey (inRow r) $ g ^. board)
+  inRow r (V2 _ y) _ = r == y
+  shiftCoordAbove (V2 x y) =
+    let offset = length . filter (< y) $ fullRowIndices in V2 x (y - offset)
 
 -- | This updates game points with respect to the current
 -- _rowClears value (thus should only be used ONCE per step)
@@ -173,13 +174,14 @@ clearFullRows g = g & board %~ clearBoard
 -- more points for back to back clears, right now the scoring is more simple
 updateScore :: Game -> Game
 updateScore g = g & score %~ (+ newPoints)
-  where
-    newPoints = (1 + g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
-    points 0  = 0
-    points 1  = 40
-    points 2  = 100
-    points 3  = 300
-    points n  = 800
+ where
+  newPoints =
+    (1 + g ^. level) * (g ^. rowClears ^. to latestOrZero ^. to points)
+  points 0 = 0
+  points 1 = 40
+  points 2 = 100
+  points 3 = 300
+  points n = 800
 
 -- | Empties row on 0, otherwise appends value (just keeps consecutive information)
 addToRowClears :: Int -> Seq.Seq Int -> Seq.Seq Int
@@ -189,20 +191,22 @@ addToRowClears n rs = rs |> n
 -- | Get last value of sequence or 0 if empty
 latestOrZero :: Seq.Seq Int -> Int
 latestOrZero = go . Seq.viewr
-  where go EmptyR = 0
-        go (_ :> n) = n
+ where
+  go EmptyR   = 0
+  go (_ :> n) = n
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
 rotate :: Game -> Game
 rotate g = g & block .~ nextB
-  where nextB     = fromMaybe blk $ getFirst . mconcat $ First <$> bs
-        bs        = map ($ blk) safeFuncs
-        safeFuncs = map (mkSafe .) funcs
-        mkSafe    = boolMaybe (isValidBlockPosition brd)
-        funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
-        blk       = g ^. block
-        brd       = g ^. board
+ where
+  nextB     = fromMaybe blk $ getFirst . mconcat $ First <$> bs
+  bs        = map ($ blk) safeFuncs
+  safeFuncs = map (mkSafe .) funcs
+  mkSafe    = boolMaybe (isValidBlockPosition brd)
+  funcs     = [rotate', rotate' . translate Left, rotate' . translate Right]
+  blk       = g ^. block
+  brd       = g ^. board
 
 blockStopped :: Game -> Bool
 blockStopped g = isStopped (g ^. board) (g ^. block)
@@ -210,45 +214,50 @@ blockStopped g = isStopped (g ^. board) (g ^. block)
 -- | Check if a block on a board is stopped from further gravitation
 isStopped :: Board -> Block -> Bool
 isStopped brd = any cStopped . coords
-  where cStopped     = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
-        inRow1 (V2 _ y) = y == 1
+ where
+  cStopped = (||) <$> inRow1 <*> (`M.member` brd) . (translate Down)
+  inRow1 (V2 _ y) = y == 1
 
 hardDrop :: Game -> Game
-hardDrop g = g & block  .~ hardDroppedBlock g
+hardDrop g = g & block .~ hardDroppedBlock g
 
 hardDroppedBlock :: Game -> Block
 hardDroppedBlock g = translateBy n Down $ g ^. block
-  where n = minimum $ (subtract 1) <$> (minY : diffs)
-        diffs = [y - yo | (V2 xo yo) <- brdCs, (V2 x y) <- blkCs, xo == x, yo < y]
-        brdCs = g ^. board ^. to M.keys
-        blkCs = g ^. block ^. to coords
-        minY = minimum (fmap (^. _y) blkCs)
+ where
+  n     = minimum $ (subtract 1) <$> (minY : diffs)
+  diffs = [ y - yo | (V2 xo yo) <- brdCs, (V2 x y) <- blkCs, xo == x, yo < y ]
+  brdCs = g ^. board ^. to M.keys
+  blkCs = g ^. block ^. to coords
+  minY  = minimum (fmap (^. _y) blkCs)
 
 -- | Freeze current block
 freezeBlock :: Game -> Game
 freezeBlock g = g & board %~ (M.union blkMap)
-  where blk    = g ^. block
-        blkMap = M.fromList $ [(c, blk ^. shape) | c <- blk ^. to coords]
+ where
+  blk    = g ^. block
+  blkMap = M.fromList $ [ (c, blk ^. shape) | c <- blk ^. to coords ]
 
 -- | Replace block with next block
 nextBlock :: Game -> IO Game
 nextBlock g = do
   (t, ts) <- bagFourTetriminoEach (g ^. nextShapeBag)
-  pure $
-    g & block        .~ initBlock (g ^. nextShape)
-      & nextShape    .~ t
-      & nextShapeBag .~ ts
+  pure
+    $ g
+    & block .~ initBlock (g ^. nextShape)
+    & nextShape .~ t
+    & nextShapeBag .~ ts
 
 -- | Try to shift current block; if shifting not possible, leave block where it is
 shift :: Direction -> Game -> Game
 shift d g = g & block %~ shiftBlock
-  where shiftBlock b = if isValidBlockPosition (g ^. board) (translate d b)
-                          then translate d b
-                          else b
+ where
+  shiftBlock b = if isValidBlockPosition (g ^. board) (translate d b)
+    then translate d b
+    else b
 
 -- | Check if coordinate is already occupied or free in board
 isFree, isOccupied :: Board -> Coord -> Bool
-isFree     = flip M.notMember
+isFree = flip M.notMember
 isOccupied = flip M.member
 
 -- | Check if coordinate is in or out of bounds
@@ -270,12 +279,12 @@ isValidBlockPosition brd = all validCoord . coords
 -- | Shuffle a sequence (random permutation)
 shuffle :: Seq.Seq a -> IO (Seq.Seq a)
 shuffle xs
-  | null xs   = mempty
+  | null xs = mempty
   | otherwise = do
-      randomPosition <- getStdRandom (randomR (0, length xs - 1))
-      let (left, right) = Seq.splitAt randomPosition xs
-          (y :< ys)     = Seq.viewl right
-      fmap (y <|) (shuffle $ left >< ys)
+    randomPosition <- getStdRandom (randomR (0, length xs - 1))
+    let (left, right) = Seq.splitAt randomPosition xs
+        (y :< ys)     = Seq.viewl right
+    fmap (y <|) (shuffle $ left >< ys)
 
 -- | Take predicate and input and transform to Maybe
 boolMaybe :: (a -> Bool) -> a -> Maybe a
