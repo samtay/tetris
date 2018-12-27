@@ -1,6 +1,28 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Tetris where
+module Tetris
+  (
+  -- Game state modifiers
+    initGame
+  , timeStep
+  , shift
+  , rotate
+  , hardDrop
+  -- Game state queries
+  , isGameOver
+  , hardDroppedBlock
+  , coords
+  -- Types
+  , Block(..)
+  , Coord(..)
+  , Direction(..)
+  , Game(..)
+  , Tetrimino(..)
+  -- Lenses
+  , block, board, level, nextShape, score, shape
+  -- Constants
+  , boardHeight, boardWidth, relCells
+  ) where
 
 import Data.Map (Map)
 import qualified Data.Map as M
