@@ -28,7 +28,7 @@ import Tetris
 data UI = UI
   { _game    :: Game         -- ^ tetris game
   , _preview :: Maybe String -- ^ hard drop preview cell
-  , _frozen  :: Bool         -- ^ freeze after hard drop before time step
+  , _locked  :: Bool         -- ^ lock after hard drop before time step
   }
 
 makeLenses ''UI
@@ -80,18 +80,18 @@ handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down) ui
 handleEvent ui (VtyEvent (V.EvKey V.KUp []))         = exec rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) = continue $ ui & game %~ execTetris hardDrop
-                                                                     & frozen .~ True
+                                                                     & locked .~ True
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
 handleEvent ui (VtyEvent (V.EvKey V.KEsc []))        = halt ui
 handleEvent ui _                                     = continue ui
 
 -- | This common execution function is used for all game input except hard
--- drop. If frozen (from hard drop) do nothing, else execute the state
--- computation and unfreeze.
+-- drop. If locked (from hard drop) do nothing, else execute the state
+-- computation and unlock.
 exec :: Tetris () -> UI -> EventM Name (Next UI)
 exec op ui = continue
-  $ if ui ^. frozen || ui ^. game . to isGameOver
+  $ if ui ^. locked || ui ^. game . to isGameOver
     then ui
     else ui & game %~ execTetris op
 
@@ -103,7 +103,7 @@ handleTick ui =
   else do
     next <- execStateT timeStep $ ui ^. game
     continue $ ui & game .~ next
-                  & frozen .~ False
+                  & locked .~ False
 
 -- | Restart game at the same level
 restart :: UI -> EventM Name (Next UI)
@@ -111,7 +111,7 @@ restart ui = do
   let lvl = ui ^. game ^. level
   g <- liftIO $ initGame lvl
   continue $ ui & game .~ g
-                & frozen .~ False
+                & locked .~ False
 
 -- Drawing
 
