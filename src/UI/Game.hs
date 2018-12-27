@@ -29,6 +29,7 @@ data UI = UI
   { _game    :: Game         -- ^ tetris game
   , _preview :: Maybe String -- ^ hard drop preview cell
   , _locked  :: Bool         -- ^ lock after hard drop before time step
+  , _paused  :: Bool         -- ^ game paused
   }
 
 makeLenses ''UI
@@ -61,8 +62,12 @@ playGame lvl mp = do
     writeBChan chan Tick
     threadDelay delay
   initialGame <- initGame lvl
-  let initialUI = UI initialGame mp False
-  ui <- customMain (V.mkVty V.defaultConfig) (Just chan) app initialUI
+  ui <- customMain (V.mkVty V.defaultConfig) (Just chan) app $ UI
+    { _game    = initialGame
+    , _preview = mp
+    , _locked  = False
+    , _paused  = False
+    }
   return $ ui ^. game
 
 levelToDelay :: Int -> Int
@@ -81,25 +86,41 @@ handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down) ui
 handleEvent ui (VtyEvent (V.EvKey V.KUp         [])) = exec rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) =
-  continue $ ui & game %~ execTetris hardDrop & locked .~ True
+  guarded
+    (not . view paused)
+    (over game (execTetris hardDrop) . set locked True)
+    ui
+handleEvent ui (VtyEvent (V.EvKey (V.KChar 'p') [])) =
+  guarded
+    (not . view locked)
+    (over paused not)
+    ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
 handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
 handleEvent ui (VtyEvent (V.EvKey V.KEsc        [])) = halt ui
 handleEvent ui _ = continue ui
 
--- | This common execution function is used for all game input except hard
--- drop. If locked (from hard drop) do nothing, else execute the state
--- computation and unlock.
+-- | This common execution function is used for all game user input except hard
+-- drop and pause. If paused or locked (from hard drop) do nothing, else
+-- execute the state computation.
 exec :: Tetris () -> UI -> EventM Name (Next UI)
-exec op ui = continue
-  $ if ui ^. locked || ui ^. game . to isGameOver
-    then ui
-    else ui & game %~ execTetris op
+exec op =
+  guarded
+    (not . \ui -> ui ^. paused || ui ^. locked)
+    (game %~ execTetris op)
 
--- | Handles time steps, does nothing if game is over
+-- | This base execution function takes a predicate and only issues UI
+-- modification when predicate passes and game is not over.
+guarded :: (UI -> Bool) -> (UI -> UI) -> UI -> EventM Name (Next UI)
+guarded p f ui = continue
+  $ if not (p ui) || ui ^. game . to isGameOver
+    then ui
+    else f ui
+
+-- | Handles time steps, does nothing if game is over or paused
 handleTick :: UI -> EventM Name (Next UI)
 handleTick ui =
-  if ui ^. game . to isGameOver
+  if ui ^. paused || ui ^. game . to isGameOver
   then continue ui
   else do
     next <- execStateT timeStep $ ui ^. game
@@ -130,7 +151,9 @@ drawGrid ui =
   hLimit 22
     $ withBorderStyle BS.unicodeBold
     $ B.borderWithLabel (str "Tetris")
-    $ vBox rows
+    $ case ui ^. paused of
+        False -> vBox rows
+        True  -> C.center $ str "Paused"
  where
   rows =
     [ foldr (<+>) emptyWidget $ M.filterWithKey (inRow r) gmap
@@ -210,7 +233,7 @@ drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 18 -- size of next piece box
   $ vBox
     [ drawNextShape (g ^. nextShape)
-    , padTop (Pad 2) $ drawHelp
+    , padTop (Pad 1) $ drawHelp
     , padTop (Pad 1) $ drawGameOver g
     ]
 
@@ -248,6 +271,7 @@ drawHelp =
       , ("Rotate" , "k, ↑")
       , ("Drop"   , "space")
       , ("Restart", "r")
+      , ("Pause"  , "p")
       , ("Quit"   , "q")
       ]
 
