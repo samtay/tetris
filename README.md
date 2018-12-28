@@ -6,9 +6,7 @@ A terminal interface for Tetris
 
 ## installation
 
-For Mac and ArchLinux, the binaries attached to the GitHub release should suffice ([instructions](#github-release-binaries)). For other Linux distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
-
-I have not tested Windows, but I do think it should work via dex. Please let me know in an issue if it fails so I can update documentation. Thanks!
+For MacOS, the binary attached to the GitHub release should suffice ([instructions](#github-release-binaries)). If you are on Debian or similar distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
 
 #### github release binaries
 Here is a quick way to get the one for your OS:
@@ -16,13 +14,6 @@ Here is a quick way to get the one for your OS:
 curl -L https://github.com/samtay/tetris/releases/download/0.1.2/tetris-`uname -s`-`uname -m` -o tetris
 chmod +x tetris
 sudo mv tetris /usr/local/bin/
-```
-
-If you are on a Linux distro other than ArchLinux, you may see an issue with these dynamically linked binaries, specifically regarding the ncurses distribution. If you see an error such as `tetris: error while loading shared libraries: libncursesw.so.6: cannot open shared object file: No such file or directory`, an easy fix is to install the ncurses version 5 and then symlink the `libncursesw.so.5` library to the missing `libncursesw.so.6` library. For example, on a debian based system,
-```bash
-sudo apt update
-sudo apt install -y libncursesw5 libncursesw5-dev
-sudo ln -s /lib/x86_64-linux-gnu/libncursesw.so.5  /lib/x86_64-linux-gnu/libncursesw.so.6
 ```
 
 #### install from source
@@ -54,6 +45,7 @@ tetris
 ```
 
 ## usage
+
 The default game is run by simply executing the `tetris` command.
 If the unicode characters look a bit
 wonky in your terminal, you can also run
@@ -62,9 +54,17 @@ tetris --ascii-only         # uses [] as preview cell
 # or
 tetris --preview-chars 'XX' # uses custom characters as preview cell
 ```
-If you always play on level `6` and want to skip the prompt, you can start the game immediately via
+If you want to skip the level prompt, you can start the game immediately via
 ```shell
-tetris --level 6
+tetris --level n
 ```
-Lastly, to see the current highest score, you can run `tetris --high-score`.
+Lastly, to see the current high score, you can run `tetris --high-score`.
 And of course, see `tetris --help` for help.
+
+## tips
+
+#### troubleshooting
+People seem to have varying levels of success with the linux binary. Please note that it is compiled dynamically and hence should not be expected to work on most distros. If you have other problems, feel free to open an issue.
+
+#### roll your own
+If you like games in your terminal and have an interest in functional programming, write your own! This code is built on top of [brick](https://github.com/jtdaugherty/brick) which makes building terminal user interfaces very accessible. I also have a [tutorial](https://samtay.github.io/articles/brick.html) that can help you get started.
