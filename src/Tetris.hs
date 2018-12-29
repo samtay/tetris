@@ -187,8 +187,7 @@ timeStep = do
     False -> gravitate
     True -> do
       freezeBlock
-      cleared <- clearFullRows
-      addToRowClears cleared
+      clearFullRows >>= addToRowClears
       updateScore
       nextBlock
 
