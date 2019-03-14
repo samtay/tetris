@@ -16,16 +16,16 @@ import UI.PickLevel (pickLevel)
 import UI.Game (playGame)
 
 data Opts = Opts
-  { hardDrop :: Maybe HardDropOpt
+  { hardDrop :: HardDropOpt
   , level    :: Maybe Int
   , score    :: Bool
   }
 
-data HardDropOpt = AsciiOnly | CustomChars String
+data HardDropOpt = None | AsciiOnly | CustomChars String
 
 opts :: Parser Opts
 opts = Opts
-  <$> optional hardDropOpt
+  <$> hardDropOpt
   <*> optional (option auto
     (  long "level"
     <> short 'l'
@@ -36,17 +36,23 @@ opts = Opts
     <> help "Print high score and exit" )
 
 hardDropOpt :: Parser HardDropOpt
-hardDropOpt = asciiOpt <|> custOpt
+hardDropOpt = noneOpt <|> asciiOpt <|> custOpt
   where
+    noneOpt = flag' None
+      (  long "no-preview"
+      <> short 'n'
+      <> help "Don't show preview cell" )
     asciiOpt = flag' AsciiOnly
       (  long "ascii-only"
       <> short 'a'
-      <> help "Use '[]' as hard drop preview cell instead of '◤◢'" )
+      <> help "Use '[]' as hard drop preview cell" )
     custOpt = CustomChars <$> option twoChar
       (  long "preview-chars"
       <> short 'p'
       <> metavar "CHARS"
-      <> help "Custom two character preview cell" )
+      <> value "◤◢"
+      <> showDefaultWith (const "◤◢")
+      <> help "Customize two character preview cell" )
 
 fullopts :: ParserInfo Opts
 fullopts = info (helper <*> opts)
@@ -60,17 +66,17 @@ twoChar = do
      then readerError "Preview must be two characters long"
      else return cs
 
-hdOptStr :: HardDropOpt -> String
-hdOptStr AsciiOnly = "[]"
-hdOptStr (CustomChars s) = s
+hdOptStr :: HardDropOpt -> Maybe String
+hdOptStr None            = Nothing
+hdOptStr AsciiOnly       = Just "[]"
+hdOptStr (CustomChars s) = Just s
 
 main :: IO ()
 main = do
   (Opts hd ml hs) <- execParser fullopts           -- get CLI opts/args
-  let mp = hdOptStr <$> hd                         -- determine hard drop preview cell
   when hs (getHighScore >>= printM >> exitSuccess) -- show high score and exit
   l <- fromMaybe pickLevel (return <$> ml)         -- pick level prompt if necessary
-  g <- playGame l mp                               -- play game
+  g <- playGame l (hdOptStr hd)                    -- play game
   handleEndGame (_score g)                         -- save & print score
 
 handleEndGame :: Int -> IO ()

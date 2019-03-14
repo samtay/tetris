@@ -59,7 +59,10 @@ app = App
   , appAttrMap      = const theMap
   }
 
-playGame :: Int -> Maybe String -> IO Game
+playGame
+  :: Int -- ^ Starting level
+  -> Maybe String -- ^ Preview cell (Nothing == no preview)
+  -> IO Game
 playGame lvl mp = do
   let delay = levelToDelay lvl
   chan <- newBChan 10
@@ -169,26 +172,23 @@ drawGrid ui =
                 ]
  where
   g    = ui ^. game
-  draw = drawMCell (ui ^. preview) InGrid
+  draw = drawCell (ui ^. preview) InGrid
   blockMap b v =
     M.fromList $ [ (c, draw v . Just $ b ^. shape) | c <- coords b ]
 
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap =
-  let ew = drawMCell Nothing InGrid Normal Nothing
+  let ew = drawCell Nothing InGrid Normal Nothing
   in  M.fromList
         [ ((V2 x y), ew) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
 
-drawMCell
+drawCell
   :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
-drawMCell _  InGrid      _ Nothing  = withAttr emptyAttr cw
-drawMCell _  InNextShape _ Nothing  = withAttr emptyAttr ecw
-drawMCell mp _           v (Just t) = drawCell mp t v
-
-drawCell :: Maybe String -> Tetrimino -> TVisual -> Widget Name
-drawCell _        t Normal   = withAttr (tToAttr t) cw
-drawCell Nothing  t HardDrop = withAttr (tToAttrH t) hcw
-drawCell (Just p) t HardDrop = withAttr (tToAttrH t) (str p)
+drawCell _        InGrid      _        Nothing  = withAttr emptyAttr cw
+drawCell _        InNextShape _        Nothing  = withAttr emptyAttr ecw
+drawCell Nothing  _           HardDrop (Just _) = withAttr emptyAttr cw
+drawCell (Just p) _           HardDrop (Just t) = withAttr (tToAttrH t) (str p)
+drawCell _        _           Normal   (Just t) = withAttr (tToAttr t) cw
 
 tToAttr :: Tetrimino -> AttrName
 tToAttr I = iAttr
@@ -213,9 +213,6 @@ cw = str " ."
 
 ecw :: Widget Name
 ecw = str "  "
-
-hcw :: Widget Name
-hcw = str "◤◢"
 
 drawStats :: Game -> Widget Name
 drawStats g =
@@ -253,7 +250,7 @@ drawNextShape t =
     $   [0, -1]
     <&> \y ->
           hBox
-            $   drawMCell Nothing InNextShape Normal
+            $   drawCell Nothing InNextShape Normal
             <$> [ t <$ guard (V2 x y `elem` coords blk) | x <- [-2 .. 1] ]
   where blk = Block t (V2 0 0) (relCells t)
 
