@@ -7,7 +7,7 @@ module UI.Game
   ) where
 
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (guard, void, forever)
+import Control.Monad (void, forever)
 import Control.Monad.IO.Class (liftIO)
 import Prelude hiding (Left, Right)
 
@@ -40,13 +40,9 @@ data Tick = Tick
 -- | Named resources
 type Name = ()
 
-data CellLocation
-  = InGrid
-  | InNextShape
-
-data TVisual
-  = Normal
-  | HardDrop
+data VisualBlock
+  = NormalBlock
+  | HardDropBlock String
 
 -- App definition and execution
 
@@ -165,30 +161,30 @@ drawGrid ui =
           foldr (<+>) emptyWidget
             . M.filterWithKey (\(V2 _ y) _ -> r == y)
             $ mconcat
-                [ draw Normal . Just <$> g ^. board
-                , blockMap (g ^. block)                    Normal
-                , blockMap (evalTetris hardDroppedBlock g) HardDrop
+                [ drawBlockCell NormalBlock <$> ui ^. game ^. board
+                , blockMap NormalBlock (ui ^. game ^. block)
+                , case (ui ^. preview) of
+                    Nothing -> M.empty
+                    Just s  -> blockMap (HardDropBlock s) (evalTetris hardDroppedBlock (ui ^. game))
                 , emptyCellMap
                 ]
  where
-  g    = ui ^. game
-  draw = drawCell (ui ^. preview) InGrid
-  blockMap b v =
-    M.fromList $ [ (c, draw v . Just $ b ^. shape) | c <- coords b ]
+  blockMap v b =
+    M.fromList $ [ (c, drawBlockCell v (b ^. shape)) | c <- coords b ]
 
 emptyCellMap :: Map Coord (Widget Name)
-emptyCellMap =
-  let ew = drawCell Nothing InGrid Normal Nothing
-  in  M.fromList
-        [ ((V2 x y), ew) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
+emptyCellMap = M.fromList
+  [ ((V2 x y), emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
 
-drawCell
-  :: Maybe String -> CellLocation -> TVisual -> Maybe Tetrimino -> Widget Name
-drawCell _        InGrid      _        Nothing  = withAttr emptyAttr cw
-drawCell _        InNextShape _        Nothing  = withAttr emptyAttr ecw
-drawCell Nothing  _           HardDrop (Just _) = withAttr emptyAttr cw
-drawCell (Just p) _           HardDrop (Just t) = withAttr (tToAttrH t) (str p)
-drawCell _        _           Normal   (Just t) = withAttr (tToAttr t) cw
+emptyGridCellW :: Widget Name
+emptyGridCellW = withAttr emptyAttr cw
+
+emptyNextShapeCellW :: Widget Name
+emptyNextShapeCellW = withAttr emptyAttr ecw
+
+drawBlockCell :: VisualBlock -> Tetrimino -> Widget Name
+drawBlockCell NormalBlock       t = withAttr (tToAttr t) cw
+drawBlockCell (HardDropBlock s) t = withAttr (tToAttrH t) (str s)
 
 tToAttr :: Tetrimino -> AttrName
 tToAttr I = iAttr
@@ -242,16 +238,17 @@ drawInfo g = hLimit 18 -- size of next piece box
 drawNextShape :: Tetrimino -> Widget Name
 drawNextShape t =
   withBorderStyle BS.unicodeBold
-    $   B.borderWithLabel (str "Next")
-    $   padTopBottom 1
-    $   padLeftRight 4
-    $   vLimit 4
-    $   vBox
-    $   [0, -1]
-    <&> \y ->
-          hBox
-            $   drawCell Nothing InNextShape Normal
-            <$> [ t <$ guard (V2 x y `elem` coords blk) | x <- [-2 .. 1] ]
+    $ B.borderWithLabel (str "Next")
+    $ padTopBottom 1
+    $ padLeftRight 4
+    $ vLimit 4
+    $ vBox
+    $ [0, -1] <&> \y ->
+      hBox [ if V2 x y `elem` coords blk
+             then drawBlockCell NormalBlock t
+             else emptyNextShapeCellW
+           | x <- [-2 .. 1]
+           ]
   where blk = Block t (V2 0 0) (relCells t)
 
 drawHelp :: Widget Name
