@@ -24,6 +24,8 @@ cd tetris
 stack install tetris
 ```
 
+Arch Linux users may install from [AUR](https://aur.archlinux.org/packages/tetris-terminal-git/).
+
 #### install via dex
 [dex](https://github.com/dockerland/dex) is a really cool application manager that lets you run executables as docker images, so that you don't need to worry about installing them or their dependencies directly.
 ```bash
