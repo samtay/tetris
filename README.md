@@ -6,7 +6,8 @@ A terminal interface for Tetris
 
 ## installation
 
-For MacOS, the binary attached to the GitHub release should suffice ([instructions](#github-release-binaries)). If you are on Debian or similar distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
+For MacOS, the binary attached to the GitHub release should suffice. 
+Arch Linux users can install from [AUR](https://aur.archlinux.org/packages/tetris-terminal-git/). If you are on Debian or similar distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
 
 #### github release binaries
 Here is a quick way to get the one for your OS:
@@ -14,6 +15,12 @@ Here is a quick way to get the one for your OS:
 curl -L https://github.com/samtay/tetris/releases/download/0.1.3/tetris-`uname -s`-`uname -m` -o tetris
 chmod +x tetris
 sudo mv tetris /usr/local/bin/
+```
+
+#### install on Arch Linux
+However you typically install from the AUR, e.g.
+```bash
+yaourt -S tetris-terminal-git
 ```
 
 #### install from source
@@ -24,7 +31,6 @@ cd tetris
 stack install tetris
 ```
 
-Arch Linux users may install from [AUR](https://aur.archlinux.org/packages/tetris-terminal-git/).
 
 #### install via dex
 [dex](https://github.com/dockerland/dex) is a really cool application manager that lets you run executables as docker images, so that you don't need to worry about installing them or their dependencies directly.
