@@ -1,4 +1,4 @@
-FROM base/archlinux
+FROM archlinux/base
 
 ENV DEXBUILD_DIR="/bin"
 
