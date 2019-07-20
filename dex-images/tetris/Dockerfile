@@ -7,7 +7,7 @@ RUN mkdir -p "${DEXBUILD_DIR}"
 WORKDIR ${DEXBUILD_DIR}
 
 RUN ( \
-  curl -L https://github.com/samtay/tetris/releases/download/0.1.2/tetris-`uname -s`-`uname -m` -o tetris && \
+  curl -L https://github.com/samtay/tetris/releases/download/0.1.4/tetris-`uname -s`-`uname -m` -o tetris && \
   chmod +x tetris && \
   true )
 
