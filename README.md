@@ -5,22 +5,17 @@ A terminal interface for Tetris
 ![terminal-gif](./docs/img/play.gif)
 
 ## installation
+Installation on MacOS and Arch Linux is simple, just follow the instructions below. Other Linux distros can try the binary attached to the github releases, but no guarantees. Otherwise you can install from [source](#install-from-source) or via [dex](#install-via-dex).
 
-For MacOS, the binary attached to the GitHub release should suffice.
-Arch Linux users can install from [AUR](https://aur.archlinux.org/packages/tetris-terminal-git/). If you are on Debian or similar distros, you can try the Linux binary as well but no guarantees. See the other two options, installing from [source](#install-from-source) and [dex](#install-via-dex).
-
-#### github release binaries
-Here is a quick way to get the one for your OS:
+#### MacOS
+Installation on a Mac is simple with Homebrew:
 ```bash
-curl -L https://github.com/samtay/tetris/releases/download/0.1.4/tetris-`uname -s`-`uname -m` -o tetris
-chmod +x tetris
-sudo mv tetris /usr/local/bin/
+brew install samtay/tui/tetris
 ```
-
-#### install on Arch Linux
-However you typically install from the AUR, e.g.
+#### Arch Linux
+Arch Linux users can install from the [AUR](https://aur.archlinux.org/packages/tetris-terminal-git/), e.g.
 ```bash
-yaourt -S tetris-terminal-git
+yay -S tetris-terminal-git # or yaourt, etc.
 ```
 
 #### install from source
@@ -30,7 +25,6 @@ git clone https://github.com/samtay/tetris.git
 cd tetris
 stack install tetris
 ```
-
 
 #### install via dex
 [dex](https://github.com/dockerland/dex) is a really cool application manager that lets you run executables as docker images, so that you don't need to worry about installing them or their dependencies directly.
