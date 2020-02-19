@@ -5,7 +5,7 @@ A terminal interface for Tetris
 ![terminal-gif](./docs/img/play.gif)
 
 ## installation
-Installation on MacOS and Arch Linux is simple, just follow the instructions below. Other Linux distros can try the [github release binary](https://github.com/samtay/tetris/releases/download/0.1.4/tetris-debian-x86_64), but no guarantees. Otherwise you can install from [source](#install-from-source) or via [dex](#install-via-dex).
+Installation on MacOS and Linux is outlined below. Windows support is questionable, but you can try to install from [source](#install-from-source) or via [dex](#install-via-dex).
 
 #### MacOS
 Installation on a Mac is simple with Homebrew:
@@ -17,7 +17,11 @@ Arch Linux users can install from the [AUR](https://aur.archlinux.org/packages/t
 ```bash
 yay -S tetris-terminal-git # or yaourt, etc.
 ```
-
+#### Snapcraft
+Thanks to **@thefenriswolf** this is available on most Linux distributions via [snapcraft](https://snapcraft.io/tetris-thefenriswolf):
+```bash
+sudo snap install tetris-thefenriswolf
+```
 #### install from source
 First [get stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). Then
 ```bash
