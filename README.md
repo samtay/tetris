@@ -5,7 +5,7 @@ A terminal interface for Tetris
 ![terminal-gif](./docs/img/play.gif)
 
 ## installation
-Installation on MacOS and Arch Linux is simple, just follow the instructions below. Other Linux distros can try the binary attached to the github releases, but no guarantees. Otherwise you can install from [source](#install-from-source) or via [dex](#install-via-dex).
+Installation on MacOS and Arch Linux is simple, just follow the instructions below. Other Linux distros can try the [github release binary](https://github.com/samtay/tetris/releases/download/0.1.4/tetris-debian-x86_64), but no guarantees. Otherwise you can install from [source](#install-from-source) or via [dex](#install-via-dex).
 
 #### MacOS
 Installation on a Mac is simple with Homebrew:
