@@ -5,7 +5,7 @@ A terminal interface for Tetris
 ![terminal-gif](./docs/img/play.gif)
 
 ## installation
-Installation on MacOS and Linux is outlined below. Windows support is questionable, but you can try to install from [source](#install-from-source) or via [dex](#install-via-dex).
+Installation on MacOS and Linux is outlined below. Windows support is questionable, but you can try to install from [source](#install-from-source).
 
 #### MacOS
 Installation on a Mac is simple with Homebrew:
@@ -21,6 +21,7 @@ yay -S tetris-terminal-git # or yaourt, etc.
 Thanks to **@thefenriswolf** this is available on most Linux distributions via [snapcraft](https://snapcraft.io/tetris-thefenriswolf):
 ```bash
 sudo snap install tetris-thefenriswolf
+alias tetris=/snap/bin/tetris-thefenriswolf.tetris # add to .bashrc or .zshrc etc.
 ```
 #### install from source
 First [get stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). Then
@@ -28,26 +29,6 @@ First [get stack](https://docs.haskellstack.org/en/stable/README/#how-to-install
 git clone https://github.com/samtay/tetris.git
 cd tetris
 stack install tetris
-```
-
-#### install via dex
-[dex](https://github.com/dockerland/dex) is a really cool application manager that lets you run executables as docker images, so that you don't need to worry about installing them or their dependencies directly.
-```bash
-# get dex if you don't have it
-curl -L http://get.iceburg.net/dex/latest-0.12.x/dex -o dex
-chmod +x dex
-sudo mv dex /usr/local/bin
-
-# add tetris as a repo
-dex repo add tetris https://github.com/samtay/tetris.git
-
-# run tetris
-dex run tetris
-
-### optionally install tetris globally ###
-export PATH="$HOME/.dex/bin:$PATH"
-dex install --global tetris
-tetris
 ```
 
 ## usage
