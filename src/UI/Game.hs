@@ -66,7 +66,8 @@ playGame lvl mp = do
     writeBChan chan Tick
     threadDelay delay
   initialGame <- initGame lvl
-  ui <- customMain (V.mkVty V.defaultConfig) (Just chan) app $ UI
+  initialVty <-V.mkVty =<< V.standardIOConfig
+  ui <- customMain initialVty (V.mkVty V.defaultConfig) (Just chan) app $ UI
     { _game    = initialGame
     , _preview = mp
     , _locked  = False
