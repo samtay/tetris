@@ -231,8 +231,8 @@ drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 18 -- size of next piece box
   $ vBox
     [ drawNextShape (g ^. nextShape)
-    , padTop (Pad 1) $ drawHelp
-    , padTop (Pad 1) $ drawGameOver g
+    , padTop (Pad 1) drawHelp
+    , padTop (Pad 1) (drawGameOver g)
     ]
 
 drawNextShape :: Tetrimino -> Widget Name
@@ -258,7 +258,7 @@ drawHelp =
     $ padTopBottom 1
     $ vBox
     $ map (uncurry drawKeyInfo)
-    $ [ ("Left"   , "h, ←")
+      [ ("Left"   , "h, ←")
       , ("Right"  , "l, →")
       , ("Down"   , "j, ↓")
       , ("Rotate" , "k, ↑")
