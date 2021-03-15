@@ -205,7 +205,7 @@ clearFullRows = do
   modifying board $ M.filterWithKey $ \(V2 _ y) _ -> y `notElem` fullRows
   -- Shift cells above full rows
   modifying board $ M.mapKeysMonotonic $ over _y $ \y ->
-    y - (length $ filter (< y) fullRows)
+    y - length (filter (< y) fullRows)
   return $ length fullRows
 
 -- | Empties row on 0, otherwise appends value (just keeps consecutive information)
