@@ -163,7 +163,7 @@ drawGrid ui =
             $ mconcat
                 [ drawBlockCell NormalBlock <$> ui ^. game ^. board
                 , blockMap NormalBlock (ui ^. game ^. block)
-                , case (ui ^. preview) of
+                , case ui ^. preview of
                     Nothing -> M.empty
                     Just s  -> blockMap (HardDropBlock s) (evalTetris hardDroppedBlock (ui ^. game))
                 , emptyCellMap
@@ -174,7 +174,7 @@ drawGrid ui =
 
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap = M.fromList
-  [ ((V2 x y), emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
+  [ (V2 x y, emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
 
 emptyGridCellW :: Widget Name
 emptyGridCellW = withAttr emptyAttr cw
@@ -275,7 +275,7 @@ drawKeyInfo action keys =
 
 drawGameOver :: Game -> Widget Name
 drawGameOver g =
-  if (isGameOver g)
+  if isGameOver g
   then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
   else emptyWidget
 

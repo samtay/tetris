@@ -143,8 +143,8 @@ rotateRaw b@(Block s o@(V2 xo yo) cs)
     s == I && V2 xo (yo + 1) `elem` cs = rotateWith clockwise
   | otherwise                          = rotateWith counterclockwise
  where
-  clockwise        = (+ o) . (cwperp) . (subtract o)
-  counterclockwise = (+ o) . LV.perp . (subtract o)
+  clockwise        = (+ o) . cwperp . subtract o
+  counterclockwise = (+ o) . LV.perp . subtract o
   rotateWith dir = b & extra %~ fmap dir
   cwperp (V2 x y) = V2 y (-x)
 
@@ -160,7 +160,7 @@ coords b = b ^. origin : b ^. extra
 bagFourTetriminoEach :: Seq.Seq Tetrimino -> IO (Tetrimino, Seq.Seq Tetrimino)
 bagFourTetriminoEach (t :<| ts) = pure (t, ts)
 bagFourTetriminoEach Empty =
-  bagFourTetriminoEach <=< shuffle . Seq.fromList . take 28 $ cycle [(I) ..]
+  bagFourTetriminoEach <=< shuffle . Seq.fromList . take 28 $ cycle [I ..]
 
 -- | Initialize a game with a given level
 initGame :: Int -> IO Game
@@ -260,8 +260,8 @@ blockStopped g = isStopped (g ^. board) (g ^. block)
 isStopped :: Board -> Block -> Bool
 isStopped brd = any stopped . coords
  where
-  stopped = (||) <$> atBottom <*> (`M.member` brd) . (translate Down)
-  atBottom = (== 1) . (view _y)
+  stopped = (||) <$> atBottom <*> (`M.member` brd) . translate Down
+  atBottom = (== 1) . view _y
 
 hardDrop :: Tetris ()
 hardDrop = hardDroppedBlock >>= assign block
@@ -277,8 +277,8 @@ hardDroppedBlock = do
         , xo == x
         , yo < y
         ]
-      minY = minimum $ (view _y) <$> blockCoords
-      dist = minimum $ (subtract 1) <$> (minY : diffs)
+      minY = minimum $ view _y <$> blockCoords
+      dist = minimum $ subtract 1 <$> (minY : diffs)
   translateBy dist Down <$> use block
 
 -- | Freeze current block
@@ -326,7 +326,7 @@ shuffle xs
   | null xs = mempty
   | otherwise = do
     randomPosition <- getStdRandom (randomR (0, length xs - 1))
-    let (left, (y :<| ys)) = Seq.splitAt randomPosition xs
+    let (left, y :<| ys) = Seq.splitAt randomPosition xs
     fmap (y <|) (shuffle $ left >< ys)
 
 v2 :: (a, a) -> V2 a
