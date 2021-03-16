@@ -222,7 +222,7 @@ drawStats g =
         ]
 
 drawStat :: String -> Int -> Widget Name
-drawStat s n = padLeftRight 1 $ str s <+> (padLeft Max $ str $ show n)
+drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
 
 drawLeaderBoard :: Game -> Widget Name
 drawLeaderBoard _ = emptyWidget
@@ -270,8 +270,8 @@ drawHelp =
 
 drawKeyInfo :: String -> String -> Widget Name
 drawKeyInfo action keys =
-  (padRight Max $ padLeft (Pad 1) $ str action)
-    <+> (padLeft Max $ padRight (Pad 1) $ str keys)
+  padRight Max (padLeft (Pad 1) $ str action)
+    <+> padLeft Max (padRight (Pad 1) $ str keys)
 
 drawGameOver :: Game -> Widget Name
 drawGameOver g =
