@@ -163,7 +163,7 @@ drawGrid ui =
             $ mconcat
                 [ drawBlockCell NormalBlock <$> ui ^. (game . board)
                 , blockMap NormalBlock (ui ^. (game . block))
-                , case (ui ^. preview) of
+                , case ui ^. preview of
                     Nothing -> M.empty
                     Just s  -> blockMap (HardDropBlock s) (evalTetris hardDroppedBlock (ui ^. game))
                 , emptyCellMap
@@ -174,7 +174,7 @@ drawGrid ui =
 
 emptyCellMap :: Map Coord (Widget Name)
 emptyCellMap = M.fromList
-  [ ((V2 x y), emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
+  [ (V2 x y, emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
 
 emptyGridCellW :: Widget Name
 emptyGridCellW = withAttr emptyAttr cw
@@ -222,7 +222,7 @@ drawStats g =
         ]
 
 drawStat :: String -> Int -> Widget Name
-drawStat s n = padLeftRight 1 $ str s <+> (padLeft Max $ str $ show n)
+drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
 
 drawLeaderBoard :: Game -> Widget Name
 drawLeaderBoard _ = emptyWidget
@@ -231,8 +231,8 @@ drawInfo :: Game -> Widget Name
 drawInfo g = hLimit 18 -- size of next piece box
   $ vBox
     [ drawNextShape (g ^. nextShape)
-    , padTop (Pad 1) $ drawHelp
-    , padTop (Pad 1) $ drawGameOver g
+    , padTop (Pad 1) drawHelp
+    , padTop (Pad 1) (drawGameOver g)
     ]
 
 drawNextShape :: Tetrimino -> Widget Name
@@ -258,7 +258,7 @@ drawHelp =
     $ padTopBottom 1
     $ vBox
     $ map (uncurry drawKeyInfo)
-    $ [ ("Left"   , "h, ←")
+      [ ("Left"   , "h, ←")
       , ("Right"  , "l, →")
       , ("Down"   , "j, ↓")
       , ("Rotate" , "k, ↑")
@@ -270,12 +270,12 @@ drawHelp =
 
 drawKeyInfo :: String -> String -> Widget Name
 drawKeyInfo action keys =
-  (padRight Max $ padLeft (Pad 1) $ str action)
-    <+> (padLeft Max $ padRight (Pad 1) $ str keys)
+  padRight Max (padLeft (Pad 1) $ str action)
+    <+> padLeft Max (padRight (Pad 1) $ str keys)
 
 drawGameOver :: Game -> Widget Name
 drawGameOver g =
-  if (isGameOver g)
+  if isGameOver g
   then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
   else emptyWidget
 

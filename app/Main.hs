@@ -1,7 +1,6 @@
 module Main where
 
 import Control.Monad (when)
-import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import System.Exit (exitSuccess)
 import System.IO (readFile, writeFile)
@@ -75,7 +74,7 @@ main :: IO ()
 main = do
   (Opts hd ml hs) <- execParser fullopts           -- get CLI opts/args
   when hs (getHighScore >>= printM >> exitSuccess) -- show high score and exit
-  l <- fromMaybe pickLevel (return <$> ml)         -- pick level prompt if necessary
+  l <- maybe pickLevel return ml                   -- pick level prompt if necessary
   g <- playGame l (hdOptStr hd)                    -- play game
   handleEndGame (_score g)                         -- save & print score
 
