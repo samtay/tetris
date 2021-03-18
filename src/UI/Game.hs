@@ -134,7 +134,7 @@ handleTick ui =
 -- | Restart game at the same level
 restart :: UI -> EventM Name (Next UI)
 restart ui = do
-  let lvl = ui ^. game ^. level
+  let lvl = ui ^. (game . level)
   g <- liftIO $ initGame lvl
   continue $ ui & game .~ g
                 & locked .~ False
@@ -161,8 +161,8 @@ drawGrid ui =
           foldr (<+>) emptyWidget
             . M.filterWithKey (\(V2 _ y) _ -> r == y)
             $ mconcat
-                [ drawBlockCell NormalBlock <$> ui ^. game ^. board
-                , blockMap NormalBlock (ui ^. game ^. block)
+                [ drawBlockCell NormalBlock <$> ui ^. (game . board)
+                , blockMap NormalBlock (ui ^. (game . block))
                 , case ui ^. preview of
                     Nothing -> M.empty
                     Just s  -> blockMap (HardDropBlock s) (evalTetris hardDroppedBlock (ui ^. game))

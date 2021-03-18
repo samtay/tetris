@@ -178,7 +178,7 @@ initGame lvl = do
     }
 
 isGameOver :: Game -> Bool
-isGameOver g = blockStopped g && g ^. block ^. origin == startOrigin
+isGameOver g = blockStopped g && g ^. (block . origin) == startOrigin
 
 -- | The main game execution, this is executed at each discrete time step
 timeStep :: MonadIO m => TetrisT m ()
