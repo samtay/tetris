@@ -1,9 +1,7 @@
 module Main where
 
 import Control.Monad (when)
-import Data.Monoid ((<>))
 import System.Exit (exitSuccess)
-import System.IO (readFile, writeFile)
 import Text.Read (readMaybe)
 
 import Options.Applicative

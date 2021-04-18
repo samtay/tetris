@@ -4,8 +4,8 @@ homepage:            https://github.com/samtay/tetris#readme
 license:             BSD3
 license-file:        LICENSE
 author:              Sam Tay
-maintainer:          sam.chong.tay@gmail.com
-copyright:           2017 Sam Tay
+maintainer:          sam.chong.tay@pm.me
+copyright:           2021 Sam Tay
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
