@@ -187,7 +187,8 @@ timeStep = do
     False -> gravitate
     True -> do
       freezeBlock
-      clearFullRows >>= addToRowClears
+      n <- clearFullRows
+      addToRowClears n
       updateScore
       nextBlock
 
@@ -326,8 +327,9 @@ shuffle xs
   | null xs = mempty
   | otherwise = do
     randomPosition <- getStdRandom (randomR (0, length xs - 1))
-    let (left, y :<| ys) = Seq.splitAt randomPosition xs
-    fmap (y <|) (shuffle $ left >< ys)
+    case Seq.splitAt randomPosition xs of
+      (left, y :<| ys) ->  fmap (y <|) (shuffle $ left >< ys)
+      _ -> error "impossible"
 
 v2 :: (a, a) -> V2 a
 v2 (x, y) = V2 x y

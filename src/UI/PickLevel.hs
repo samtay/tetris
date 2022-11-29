@@ -3,6 +3,7 @@ module UI.PickLevel
   ) where
 
 import System.Exit (exitSuccess)
+import Control.Monad (when)
 
 import Brick
 import qualified Brick.Widgets.Border as B
@@ -14,7 +15,7 @@ app :: App (Maybe Int) e ()
 app = App
   { appDraw         = const [ui]
   , appHandleEvent  = handleEvent
-  , appStartEvent   = return
+  , appStartEvent   = pure ()
   , appAttrMap      = const $ attrMap V.defAttr []
   , appChooseCursor = neverShowCursor
   }
@@ -31,15 +32,15 @@ ui =
     $ C.center
     $ str " Choose Level (0-9)"
 
-handleEvent :: Maybe Int -> BrickEvent () e -> EventM () (Next (Maybe Int))
-handleEvent n (VtyEvent (V.EvKey V.KEsc        _)) = halt n
-handleEvent n (VtyEvent (V.EvKey (V.KChar 'q') _)) = halt n
-handleEvent n (VtyEvent (V.EvKey (V.KChar 'Q') _)) = halt n
-handleEvent n (VtyEvent (V.EvKey (V.KChar d) [])) =
-  if d `elem` ['0' .. '9']
-  then halt $ Just (read [d])
-  else continue n
-handleEvent n _ = continue n
+handleEvent :: BrickEvent () e -> EventM () (Maybe Int) ()
+handleEvent (VtyEvent (V.EvKey V.KEsc        _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'q') _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar d) [])) =
+  when (d `elem` ['0' .. '9']) $ do
+    put $ Just $ read [d]
+    halt
+handleEvent _ = pure ()
 
 pickLevel :: IO Int
 pickLevel = defaultMain app Nothing >>= maybe exitSuccess return

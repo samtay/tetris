@@ -1,11 +1,11 @@
 name:                tetris
-version:             0.1.4.0
+version:             0.1.4.1
 homepage:            https://github.com/samtay/tetris#readme
 license:             BSD3
 license-file:        LICENSE
 author:              Sam Tay
 maintainer:          sam.chong.tay@pm.me
-copyright:           2021 Sam Tay
+copyright:           2022 Sam Tay
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md

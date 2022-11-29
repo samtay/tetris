@@ -7,8 +7,9 @@ module UI.Game
   ) where
 
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (void, forever)
+import Control.Monad (void, forever, when, unless)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.State (execStateT)
 import Prelude hiding (Left, Right)
 
 import Brick hiding (Down)
@@ -16,8 +17,7 @@ import Brick.BChan
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
-import Control.Lens hiding (preview, op)
-import Control.Monad.Trans.State
+import Control.Lens hiding (preview, op, zoom)
 import qualified Graphics.Vty as V
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -51,7 +51,7 @@ app = App
   { appDraw         = drawUI
   , appChooseCursor = neverShowCursor
   , appHandleEvent  = handleEvent
-  , appStartEvent   = return
+  , appStartEvent   = pure ()
   , appAttrMap      = const theMap
   }
 
@@ -81,35 +81,33 @@ levelToDelay n = floor $ 400000 * (0.85 :: Double) ^ (2 * n)
 
 -- Handling events
 
-handleEvent :: UI -> BrickEvent Name Tick -> EventM Name (Next UI)
-handleEvent ui (AppEvent Tick                      ) = handleTick ui
-handleEvent ui (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right) ui
-handleEvent ui (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left) ui
-handleEvent ui (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left) ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down) ui
-handleEvent ui (VtyEvent (V.EvKey V.KUp         [])) = exec rotate ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar ' ') [])) =
+handleEvent :: BrickEvent Name Tick -> EventM Name UI ()
+handleEvent (AppEvent Tick                      ) = handleTick
+handleEvent (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right)
+handleEvent (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left)
+handleEvent (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down)
+handleEvent (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right)
+handleEvent (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left)
+handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down)
+handleEvent (VtyEvent (V.EvKey V.KUp         [])) = exec rotate
+handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate
+handleEvent (VtyEvent (V.EvKey (V.KChar ' ') [])) =
   guarded
     (not . view paused)
     (over game (execTetris hardDrop) . set locked True)
-    ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'p') [])) =
+handleEvent (VtyEvent (V.EvKey (V.KChar 'p') [])) =
   guarded
     (not . view locked)
     (over paused not)
-    ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart ui
-handleEvent ui (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt ui
-handleEvent ui (VtyEvent (V.EvKey V.KEsc        [])) = halt ui
-handleEvent ui _ = continue ui
+handleEvent (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart
+handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
+handleEvent (VtyEvent (V.EvKey V.KEsc        [])) = halt
+handleEvent _ = pure ()
 
 -- | This common execution function is used for all game user input except hard
 -- drop and pause. If paused or locked (from hard drop) do nothing, else
 -- execute the state computation.
-exec :: Tetris () -> UI -> EventM Name (Next UI)
+exec :: Tetris () -> EventM Name UI ()
 exec op =
   guarded
     (not . \ui -> ui ^. paused || ui ^. locked)
@@ -117,29 +115,30 @@ exec op =
 
 -- | This base execution function takes a predicate and only issues UI
 -- modification when predicate passes and game is not over.
-guarded :: (UI -> Bool) -> (UI -> UI) -> UI -> EventM Name (Next UI)
-guarded p f ui = continue
-  $ if not (p ui) || ui ^. game . to isGameOver
-    then ui
-    else f ui
+guarded :: (UI -> Bool) -> (UI -> UI) -> EventM Name UI ()
+guarded p f = do
+  ui <- get
+  when (p ui && not (ui ^. game . to isGameOver)) $
+    modify f
 
 -- | Handles time steps, does nothing if game is over or paused
-handleTick :: UI -> EventM Name (Next UI)
-handleTick ui =
-  if ui ^. paused || ui ^. game . to isGameOver
-  then continue ui
-  else do
-    next <- execStateT timeStep $ ui ^. game
-    continue $ ui & game .~ next
-                  & locked .~ False
+handleTick :: EventM Name UI ()
+handleTick = do
+  ui <- get
+  unless (ui ^. paused || ui ^. game . to isGameOver) $ do
+    -- awkward, should just mutate the inner state
+    --zoom game timeStep
+    g' <- execStateT timeStep $ ui ^. game
+    game .= g'
+    locked .= False
 
 -- | Restart game at the same level
-restart :: UI -> EventM Name (Next UI)
-restart ui = do
-  let lvl = ui ^. (game . level)
+restart :: EventM Name UI ()
+restart = do
+  lvl <- use $ game . level
   g <- liftIO $ initGame lvl
-  continue $ ui & game .~ g
-                & locked .~ False
+  game .= g
+  locked .= False
 
 -- Drawing
 
@@ -311,25 +310,25 @@ tToColor J = V.blue
 tToColor L = V.white
 
 iAttr, oAttr, tAttr, sAttr, zAttr, jAttr, lAttr :: AttrName
-iAttr = "I"
-oAttr = "O"
-tAttr = "T"
-sAttr = "S"
-zAttr = "Z"
-jAttr = "J"
-lAttr = "L"
+iAttr = attrName "I"
+oAttr = attrName "O"
+tAttr = attrName "T"
+sAttr = attrName "S"
+zAttr = attrName "Z"
+jAttr = attrName "J"
+lAttr = attrName "L"
 
 ihAttr, ohAttr, thAttr, shAttr, zhAttr, jhAttr, lhAttr :: AttrName
-ihAttr = "Ih"
-ohAttr = "Oh"
-thAttr = "Th"
-shAttr = "Sh"
-zhAttr = "Zh"
-jhAttr = "Jh"
-lhAttr = "Lh"
+ihAttr = attrName "Ih"
+ohAttr = attrName "Oh"
+thAttr = attrName "Th"
+shAttr = attrName "Sh"
+zhAttr = attrName "Zh"
+jhAttr = attrName "Jh"
+lhAttr = attrName "Lh"
 
 emptyAttr :: AttrName
-emptyAttr = "empty"
+emptyAttr = attrName "empty"
 
 gameOverAttr :: AttrName
-gameOverAttr = "gameOver"
+gameOverAttr = attrName "gameOver"
