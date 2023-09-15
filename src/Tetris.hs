@@ -21,6 +21,7 @@ module Tetris
   , Block(..)
   , Coord
   , Direction(..)
+  , RotationalDirection(..)
   , Game(..)
   , Tetrimino(..)
   , Tetris
@@ -63,6 +64,9 @@ data Block = Block
 makeLenses ''Block
 
 data Direction = Left | Right | Down
+  deriving (Eq, Show)
+
+data RotationalDirection = Clockwise | Counterclockwise
   deriving (Eq, Show)
 
 -- | Board
@@ -132,19 +136,20 @@ boardHeight = 20
 startOrigin :: Coord
 startOrigin = V2 6 22
 
--- | Rotate block counter clockwise about origin
+-- | Rotate the block clockwise (or counter-) around origin
 -- *Note*: Strict unsafe rotation not respecting boundaries
 -- Safety can only be assured within Game context
-rotateRaw :: Block -> Block
-rotateRaw b@(Block s o@(V2 xo yo) cs)
+rotateRaw :: RotationalDirection -> Block -> Block
+rotateRaw rd b@(Block s o@(V2 xo yo) cs)
   | -- O doesn't need rotation
     s == O                             = b
   | -- I only has two orientations
-    s == I && V2 xo (yo + 1) `elem` cs = rotateWith clockwise
-  | otherwise                          = rotateWith counterclockwise
+    s == I && V2 xo (yo + 1) `elem` cs = rotateWith (direction Counterclockwise)
+  | s == I                             = rotateWith (direction Clockwise)
+  | otherwise                          = rotateWith (direction rd)
  where
-  clockwise        = (+ o) . cwperp . subtract o
-  counterclockwise = (+ o) . LV.perp . subtract o
+  direction Clockwise = (+ o) . cwperp . subtract o
+  direction Counterclockwise = (+ o) . LV.perp . subtract o
   rotateWith dir = b & extra %~ fmap dir
   cwperp (V2 x y) = V2 y (-x)
 
@@ -238,19 +243,18 @@ updateScore = do
     latestOrZero Empty     = 0
     latestOrZero (_ :|> n) = n
 
--- | Handle counterclockwise block rotation (if possible)
--- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
-rotate :: Tetris ()
-rotate = do
+-- | Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
+rotate :: RotationalDirection -> Tetris ()
+rotate rd = do
   blk <- use block
   brd <- use board
   let mblk = foldr (<|>) Nothing
         $   mfilter (isValidBlockPosition brd)
         .   pure
         .   ($ blk)
-        <$> [ rotateRaw
-            , rotateRaw . translate Left
-            , rotateRaw . translate Right
+        <$> [ rotateRaw rd
+            , rotateRaw rd . translate Left
+            , rotateRaw rd . translate Right
             ]
   forM_ mblk $ assign block
 
