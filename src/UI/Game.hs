@@ -89,8 +89,9 @@ handleEvent (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down)
 handleEvent (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right)
 handleEvent (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left)
 handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down)
-handleEvent (VtyEvent (V.EvKey V.KUp         [])) = exec rotate
-handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate
+handleEvent (VtyEvent (V.EvKey V.KUp         [])) = exec (rotate Clockwise)
+handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec (rotate Clockwise)
+handleEvent (VtyEvent (V.EvKey (V.KChar 'g') [])) = exec (rotate Counterclockwise)
 handleEvent (VtyEvent (V.EvKey (V.KChar ' ') [])) =
   guarded
     (not . view paused)
@@ -262,7 +263,8 @@ drawHelp =
       [ ("Left"   , "h, ←")
       , ("Right"  , "l, →")
       , ("Down"   , "j, ↓")
-      , ("Rotate" , "k, ↑")
+      , ("RotateR", "k, ↑")
+      , ("RotateL", "g")
       , ("Drop"   , "space")
       , ("Restart", "r")
       , ("Pause"  , "p")
