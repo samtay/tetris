@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -7,9 +8,7 @@ module UI.Game
   ) where
 
 import Control.Concurrent (threadDelay, forkIO)
-import Control.Monad (void, forever, when, unless)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.State (execStateT)
+import Control.Monad (void, forever)
 import Prelude hiding (Left, Right)
 
 import Brick hiding (Down)
@@ -18,6 +17,8 @@ import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import Control.Lens hiding (preview, op, zoom)
+import Control.Monad.Extra (orM, unlessM)
+import Control.Monad.IO.Class (liftIO)
 import qualified Graphics.Vty as V
 import qualified Graphics.Vty.CrossPlatform
 import qualified Graphics.Vty.Config
@@ -84,7 +85,9 @@ levelToDelay n = floor $ 400000 * (0.85 :: Double) ^ (2 * n)
 -- Handling events
 
 handleEvent :: BrickEvent Name Tick -> EventM Name UI ()
-handleEvent (AppEvent Tick                      ) = handleTick
+handleEvent (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart
+handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
+handleEvent (VtyEvent (V.EvKey V.KEsc        [])) = halt
 handleEvent (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right)
 handleEvent (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left)
 handleEvent (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down)
@@ -94,53 +97,31 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down)
 handleEvent (VtyEvent (V.EvKey V.KUp         [])) = exec rotate
 handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate
 handleEvent (VtyEvent (V.EvKey (V.KChar ' ') [])) =
-  guarded
-    (not . view paused)
-    (over game (execTetris hardDrop) . set locked True)
+  unlessM (orM [use paused, use (game . to isGameOver)]) $ do
+    zoom game hardDrop
+    assign locked True
 handleEvent (VtyEvent (V.EvKey (V.KChar 'p') [])) =
-  guarded
-    (not . view locked)
-    (over paused not)
-handleEvent (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart
-handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
-handleEvent (VtyEvent (V.EvKey V.KEsc        [])) = halt
+  unlessM (orM [use locked, use (game . to isGameOver)]) $ do
+    modifying paused not
+handleEvent (AppEvent Tick                      ) =
+  unlessM (orM [use paused, use (game . to isGameOver)]) $ do
+    zoom game timeStep
+    assign locked False
 handleEvent _ = pure ()
 
 -- | This common execution function is used for all game user input except hard
 -- drop and pause. If paused or locked (from hard drop) do nothing, else
 -- execute the state computation.
 exec :: Tetris () -> EventM Name UI ()
-exec op =
-  guarded
-    (not . \ui -> ui ^. paused || ui ^. locked)
-    (game %~ execTetris op)
-
--- | This base execution function takes a predicate and only issues UI
--- modification when predicate passes and game is not over.
-guarded :: (UI -> Bool) -> (UI -> UI) -> EventM Name UI ()
-guarded p f = do
-  ui <- get
-  when (p ui && not (ui ^. game . to isGameOver)) $
-    modify f
-
--- | Handles time steps, does nothing if game is over or paused
-handleTick :: EventM Name UI ()
-handleTick = do
-  ui <- get
-  unless (ui ^. paused || ui ^. game . to isGameOver) $ do
-    -- awkward, should just mutate the inner state
-    --zoom game timeStep
-    g' <- execStateT timeStep $ ui ^. game
-    game .= g'
-    locked .= False
+exec = unlessM (orM [use paused, use locked, use (game . to isGameOver)]) . zoom game
 
 -- | Restart game at the same level
 restart :: EventM Name UI ()
 restart = do
   lvl <- use $ game . level
   g <- liftIO $ initGame lvl
-  game .= g
-  locked .= False
+  assign game g
+  assign locked False
 
 -- Drawing
 

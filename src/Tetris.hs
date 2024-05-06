@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,7 +12,6 @@ module Tetris
   , rotate
   , hardDrop
   -- Game state handlers
-  , execTetris
   , evalTetris
   -- Game state queries
   , isGameOver
@@ -33,9 +33,10 @@ module Tetris
 import Prelude hiding (Left, Right)
 import Control.Applicative ((<|>))
 import Control.Monad (forM_, mfilter, when, (<=<))
-import Control.Monad.IO.Class (MonadIO(..), liftIO)
 
-import Control.Monad.Trans.State (StateT(..), gets, evalStateT, execStateT)
+import Control.Monad.IO.Class (MonadIO(..), liftIO)
+import Control.Monad.State.Class (MonadState, gets)
+import Control.Monad.Trans.State (evalStateT)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq(..), (><))
@@ -44,6 +45,7 @@ import Control.Lens hiding (Empty)
 import Linear.V2 (V2(..), _y)
 import qualified Linear.V2 as LV
 import System.Random (getStdRandom, randomR)
+
 -- Types and instances
 
 -- | Tetris shape types
@@ -83,14 +85,10 @@ data Game = Game
   } deriving (Eq, Show)
 makeLenses ''Game
 
-type TetrisT = StateT Game
-type Tetris a = forall m. (Monad m) => TetrisT m a
-
 evalTetris :: Tetris a -> Game -> a
 evalTetris m = runIdentity . evalStateT m
 
-execTetris :: Tetris a -> Game -> Game
-execTetris m = runIdentity . execStateT m
+type Tetris a = forall m. MonadState Game m => m a
 
 -- Translate class for direct translations, without concern for boundaries
 -- 'shift' concerns safe translations with boundaries
@@ -181,7 +179,7 @@ isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. (block . origin) == startOrigin
 
 -- | The main game execution, this is executed at each discrete time step
-timeStep :: MonadIO m => TetrisT m ()
+timeStep :: (MonadIO m, MonadState Game m) => m ()
 timeStep = do
   gets blockStopped >>= \case
     False -> gravitate
@@ -193,11 +191,11 @@ timeStep = do
       nextBlock
 
 -- | Gravitate current block, i.e. shift down
-gravitate :: Tetris ()
+gravitate :: MonadState Game m => m ()
 gravitate = shift Down
 
 -- | If necessary: clear full rows and return the count
-clearFullRows :: Tetris Int
+clearFullRows :: MonadState Game m => m Int
 clearFullRows = do
   brd <- use board
   let rowSize r = length $ M.filterWithKey (\(V2 _ y) _ -> r == y) brd
@@ -210,7 +208,7 @@ clearFullRows = do
   return $ length fullRows
 
 -- | Empties row on 0, otherwise appends value (just keeps consecutive information)
-addToRowClears :: Int -> Tetris ()
+addToRowClears :: MonadState Game m => Int -> m ()
 addToRowClears 0 = rowClears .= mempty
 addToRowClears n = rowClears %= (|> n)
 
@@ -220,7 +218,7 @@ addToRowClears n = rowClears %= (|> n)
 -- Note I'm keeping rowClears as a sequence in case I want to award
 -- more points for back to back clears, right now the scoring is more simple,
 -- but you do get more points for more rows cleared at once.
-updateScore :: Tetris ()
+updateScore :: MonadState Game m => m ()
 updateScore = do
   multiplier <- (1 +) <$> use level
   clears <- latestOrZero <$> use rowClears
@@ -240,7 +238,7 @@ updateScore = do
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
-rotate :: Tetris ()
+rotate :: MonadState Game m => m ()
 rotate = do
   blk <- use block
   brd <- use board
@@ -264,10 +262,10 @@ isStopped brd = any stopped . coords
   stopped = (||) <$> atBottom <*> (`M.member` brd) . translate Down
   atBottom = (== 1) . view _y
 
-hardDrop :: Tetris ()
+hardDrop :: MonadState Game m => m ()
 hardDrop = hardDroppedBlock >>= assign block
 
-hardDroppedBlock :: Tetris Block
+hardDroppedBlock :: MonadState Game m => m Block
 hardDroppedBlock = do
   boardCoords <- M.keys <$> use board
   blockCoords <- coords <$> use block
@@ -283,13 +281,13 @@ hardDroppedBlock = do
   translateBy dist Down <$> use block
 
 -- | Freeze current block
-freezeBlock :: Tetris ()
+freezeBlock :: MonadState Game m => m ()
 freezeBlock = do
   blk <- use block
   modifying board $ M.union $ M.fromList [ (c, _shape blk) | c <- coords blk ]
 
 -- | Replace block with next block
-nextBlock :: MonadIO m => TetrisT m ()
+nextBlock :: (MonadIO m, MonadState Game m) => m ()
 nextBlock = do
   bag <- use nextShapeBag
   (t, ts) <- liftIO $ bagFourTetriminoEach bag
@@ -298,7 +296,7 @@ nextBlock = do
   nextShapeBag .= ts
 
 -- | Try to shift current block; if shifting not possible, leave block where it is
-shift :: Direction -> Tetris ()
+shift :: MonadState Game m => Direction -> m ()
 shift dir = do
   brd <- use board
   blk <- use block
