@@ -21,9 +21,11 @@ library
                      , containers
                      , lens
                      , linear
+                     , mtl
                      , random
                      , transformers
                      , vty
+                     , vty-crossplatform
   default-language:    Haskell2010
 
 executable tetris

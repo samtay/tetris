@@ -3,7 +3,7 @@ extra-package-dbs: []
 packages:
   - '.'
 extra-deps: []
-resolver: lts-20.1
+resolver: lts-22.19
 nix:
   packages:
     - gcc

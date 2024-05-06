@@ -19,6 +19,8 @@ import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import Control.Lens hiding (preview, op, zoom)
 import qualified Graphics.Vty as V
+import qualified Graphics.Vty.CrossPlatform
+import qualified Graphics.Vty.Config
 import Data.Map (Map)
 import qualified Data.Map as M
 import Linear.V2 (V2(..))
@@ -66,9 +68,9 @@ playGame lvl mp = do
     writeBChan chan Tick
     threadDelay delay
   initialGame <- initGame lvl
-  let builder = V.mkVty V.defaultConfig
-  initialVty <- builder
-  ui <- customMain initialVty builder (Just chan) app $ UI
+  let buildVty = Graphics.Vty.CrossPlatform.mkVty Graphics.Vty.Config.defaultConfig
+  initialVty <- buildVty
+  ui <- customMain initialVty buildVty (Just chan) app $ UI
     { _game    = initialGame
     , _preview = mp
     , _locked  = False
