@@ -1,4 +1,4 @@
-# tetris [![Build Status](https://github.com/samtay/tetris/actions/workflows/ci.yml/badge.svg)](https://github.com/samtay/tetris/actions/workflows/ci.yml)
+# tetris [![Build Status](https://github.com/samtay/tetris/actions/workflows/ci.yaml/badge.svg)](https://github.com/samtay/tetris/actions/workflows/ci.yaml)
 
 A terminal interface for Tetris
 

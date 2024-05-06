@@ -1,12 +1,12 @@
 on: [push]
 name: build
 jobs:
-  runhaskell:
-    name: Hello World
-    runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+  build:
+    name: Build
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         with:
           enable-stack: true
       - run: stack build
