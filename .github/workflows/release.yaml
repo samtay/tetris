@@ -1,0 +1,140 @@
+# This is copied from the stan project
+#
+# Note [environment variables]
+#
+# It seems absurd, but the syntax for creating environment variables
+# differs between Windows and Linux/MacOS.  See
+#
+# https://docs.github.com/en/actions/learn-github-actions/variables
+#
+# In Linux/MacOS we have to use
+#
+# run: echo "VARNAME=content" >> "$GITHUB_ENV"
+#
+# whereas in Windows we have to use
+#
+# run: echo "VARNAME=content" >> $env:GITHUB_ENV
+
+name: Release
+
+on:
+  # Trigger the workflow on the new 'v*' tag created
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  create_release:
+    name: Create Github Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1.1.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+
+      - name: Output Release URL File
+        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+      - name: Save Release URL File for publish
+        uses: actions/upload-artifact@v3
+        with:
+          name: release_url
+          path: release_url.txt
+
+  build_artifact:
+    needs: [create_release]
+    name: ${{ matrix.os }}/GHC ${{ matrix.ghc }}/${{ github.ref }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        ghc:
+          - "9.6.3"
+        cabal: ["3.8"]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set tag name
+        uses: olegtarasov/get-tag@v2.1.2
+        id: tag
+        with:
+          tagRegex: "v(.*)"
+          tagRegexGroup: 1
+
+      - name: Setup Haskell
+        uses: haskell/actions/setup@v2.4.7
+        id: setup-haskell-cabal
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: ${{ matrix.cabal }}
+
+      - name: Freeze
+        run: |
+          cabal freeze
+
+      - name: Cache ~/.cabal/store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
+
+      - name: Build binary
+        run: |
+          mkdir dist
+          cabal install exe:tetris --install-method=copy --overwrite-policy=always --installdir=dist
+
+      # See Note [environment variables]
+      - if: matrix.os == 'windows-latest'
+        name: Set binary path name on Windows
+        run: echo "BINARY_PATH=./dist/tetris.exe" >> $env:GITHUB_ENV
+
+      # See Note [environment variables]
+      - if: matrix.os != 'windows-latest'
+        name: Set binary path name not on Windows
+        run: echo "BINARY_PATH=./dist/tetris" >> "$GITHUB_ENV"
+
+      - name: Compress binary
+        uses: svenstaro/upx-action@2.3.0
+        with:
+          file: ${{ env.BINARY_PATH }}
+
+      - name: Load Release URL File from release job
+        uses: actions/download-artifact@v3
+        with:
+          name: release_url
+          path: release_url
+
+      # See Note [environment variables]
+      - if: matrix.os == 'windows-latest'
+        name: Get Release File Name & Upload URL on Widows
+        run: |
+          echo "upload_url=$(cat release_url/release_url.txt)" >> $env:GITHUB_ENV
+
+      # See Note [environment variables]
+      - if: matrix.os != 'windows-latest'
+        name: Get Release File Name & Upload URL not on Widows
+        run: |
+          echo "upload_url=$(cat release_url/release_url.txt)" >> $GITHUB_ENV
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ env.upload_url }}
+          asset_path: ${{ env.BINARY_PATH }}
+          asset_name: tetris-${{ steps.tag.outputs.tag }}-${{ runner.os }}
+          asset_content_type: application/octet-stream
