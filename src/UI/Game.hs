@@ -8,6 +8,7 @@ module UI.Game
   ) where
 
 import Control.Concurrent (threadDelay, forkIO)
+import Control.Concurrent.STM (TVar, newTVarIO, readTVarIO, writeTVar, atomically)
 import Control.Monad (void, forever)
 import Prelude hiding (Left, Right)
 
@@ -29,10 +30,12 @@ import Linear.V2 (V2(..))
 import Tetris
 
 data UI = UI
-  { _game    :: Game         -- ^ tetris game
-  , _preview :: Maybe String -- ^ hard drop preview cell
-  , _locked  :: Bool         -- ^ lock after hard drop before time step
-  , _paused  :: Bool         -- ^ game paused
+  { _game      :: Game         -- ^ tetris game
+  , _initLevel :: Int          -- ^ initial level chosen
+  , _currLevel :: TVar Int     -- ^ current level
+  , _preview   :: Maybe String -- ^ hard drop preview cell
+  , _locked    :: Bool         -- ^ lock after hard drop before time step
+  , _paused    :: Bool         -- ^ game paused
   }
 
 makeLenses ''UI
@@ -63,16 +66,20 @@ playGame
   -> Maybe String -- ^ Preview cell (Nothing == no preview)
   -> IO Game
 playGame lvl mp = do
-  let delay = levelToDelay lvl
   chan <- newBChan 10
+  -- share the current level with the thread so it can adjust speed
+  tv <- newTVarIO lvl
   void . forkIO $ forever $ do
     writeBChan chan Tick
-    threadDelay delay
+    lvl <- readTVarIO tv
+    threadDelay $ levelToDelay lvl
   initialGame <- initGame lvl
   let buildVty = Graphics.Vty.CrossPlatform.mkVty Graphics.Vty.Config.defaultConfig
   initialVty <- buildVty
   ui <- customMain initialVty buildVty (Just chan) app $ UI
     { _game    = initialGame
+    , _initLevel = lvl
+    , _currLevel = tv
     , _preview = mp
     , _locked  = False
     , _paused  = False
@@ -106,6 +113,10 @@ handleEvent (VtyEvent (V.EvKey (V.KChar 'p') [])) =
 handleEvent (AppEvent Tick                      ) =
   unlessM (orM [use paused, use (game . to isGameOver)]) $ do
     zoom game timeStep
+    -- Keep level in sync with ticker (gross)
+    lvl <- use $ game . level
+    tv <- use $ currLevel
+    liftIO . atomically $ writeTVar tv lvl
     assign locked False
 handleEvent _ = pure ()
 
@@ -115,10 +126,10 @@ handleEvent _ = pure ()
 exec :: Tetris () -> EventM Name UI ()
 exec = unlessM (orM [use paused, use locked, use (game . to isGameOver)]) . zoom game
 
--- | Restart game at the same level
+-- | Restart game at the initially chosen level
 restart :: EventM Name UI ()
 restart = do
-  lvl <- use $ game . level
+  lvl <- use $ initLevel
   g <- liftIO $ initGame lvl
   assign game g
   assign locked False
@@ -201,6 +212,7 @@ drawStats g =
     $ B.borderWithLabel (str "Stats")
     $ vBox
         [ drawStat "Score" $ g ^. score
+        , padTop (Pad 1) $ drawStat "Lines" $ g ^. linesCleared
         , padTop (Pad 1) $ drawStat "Level" $ g ^. level
         , drawLeaderBoard g
         ]

@@ -24,6 +24,7 @@ library
                      , linear
                      , mtl
                      , random
+                     , stm
                      , transformers
                      , vty
                      , vty-crossplatform

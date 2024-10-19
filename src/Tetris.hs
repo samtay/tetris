@@ -25,7 +25,7 @@ module Tetris
   , Tetrimino(..)
   , Tetris
   -- Lenses
-  , block, board, level, nextShape, score, shape
+  , block, board, level, nextShape, score, shape, linesCleared
   -- Constants
   , boardHeight, boardWidth, relCells
   ) where
@@ -35,7 +35,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (forM_, mfilter, when, (<=<))
 
 import Control.Monad.IO.Class (MonadIO(..), liftIO)
-import Control.Monad.State.Class (MonadState, gets)
+import Control.Monad.State.Class (MonadState, gets, put)
 import Control.Monad.Trans.State (evalStateT)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -79,10 +79,10 @@ data Game = Game
   , _block        :: Block
   , _nextShape    :: Tetrimino
   , _nextShapeBag :: Seq.Seq Tetrimino
-  , _rowClears    :: Seq.Seq Int
+  , _linesCleared :: Int
   , _score        :: Int
   , _board        :: Board
-  } deriving (Eq, Show)
+  } deriving (Eq)
 makeLenses ''Game
 
 evalTetris :: Tetris a -> Game -> a
@@ -171,9 +171,22 @@ initGame lvl = do
     , _nextShape    = s2
     , _nextShapeBag = bag2
     , _score        = 0
-    , _rowClears    = mempty
+    , _linesCleared = 0
     , _board        = mempty
     }
+
+-- | Increment level and reset the board
+nextLevel :: (MonadIO m, MonadState Game m) => m ()
+nextLevel = do
+  -- Increment level
+  level %= (+ 1)
+  -- Reset board
+  (s1, bag1) <- liftIO $ bagFourTetriminoEach mempty
+  (s2, bag2) <- liftIO $ bagFourTetriminoEach bag1
+  block .= initBlock s1
+  nextShape .= s2
+  nextShapeBag .= bag2
+  board .= mempty
 
 isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. (block . origin) == startOrigin
@@ -185,10 +198,10 @@ timeStep = do
     False -> gravitate
     True -> do
       freezeBlock
-      n <- clearFullRows
-      addToRowClears n
-      updateScore
-      nextBlock
+      clearFullRows >>= updateScore
+      levelFinished >>= \case
+        True -> nextLevel
+        False -> nextBlock
 
 -- | Gravitate current block, i.e. shift down
 gravitate :: MonadState Game m => m ()
@@ -205,36 +218,34 @@ clearFullRows = do
   -- Shift cells above full rows
   modifying board $ M.mapKeysMonotonic $ over _y $ \y ->
     y - length (filter (< y) fullRows)
-  return $ length fullRows
+  let clearedLines = length fullRows
+  linesCleared %= (+ clearedLines)
+  pure clearedLines
 
--- | Empties row on 0, otherwise appends value (just keeps consecutive information)
-addToRowClears :: MonadState Game m => Int -> m ()
-addToRowClears 0 = rowClears .= mempty
-addToRowClears n = rowClears %= (|> n)
-
--- | This updates game points with respect to the current
--- _rowClears value (thus should only be used ONCE per step)
+-- | This updates game points with respect to the provided number of cleared
+-- lines.
 --
--- Note I'm keeping rowClears as a sequence in case I want to award
--- more points for back to back clears, right now the scoring is more simple,
--- but you do get more points for more rows cleared at once.
-updateScore :: MonadState Game m => m ()
-updateScore = do
-  multiplier <- (1 +) <$> use level
-  clears <- latestOrZero <$> use rowClears
-  let newPoints = multiplier * points clears
+-- See https://tetris.fandom.com/wiki/Scoring
+updateScore :: (MonadState Game m, MonadIO m) => Int -> m ()
+updateScore 0 = pure ()
+updateScore lines = do
+  lvl <- use level
+  let newPoints = (lvl + 1) * points lines
   score %= (+ newPoints)
   where
-    -- Translate row clears to points
+    -- Translate row line clears to points
     points 0 = 0
     points 1 = 40
     points 2 = 100
     points 3 = 300
-    points _ = 800
-    -- | Get last value of sequence or 0 if empty
-    latestOrZero :: Seq.Seq Int -> Int
-    latestOrZero Empty     = 0
-    latestOrZero (_ :|> n) = n
+    points _ = 1200
+
+-- | Using the fixed-goal system described here: https://tetris.wiki/Marathon
+levelFinished :: (MonadState Game m, MonadIO m) => m Bool
+levelFinished = do
+  lvl <- use level
+  lc <- use linesCleared
+  pure $ lvl < 15 && lc >= 10 * (lvl + 1)
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
