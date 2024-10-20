@@ -52,15 +52,12 @@ jobs:
 
   build_artifact:
     needs: [create_release]
-    name: ${{ matrix.os }}/GHC ${{ matrix.ghc }}/${{ github.ref }}
+    name: ${{ matrix.os }}/${{ github.ref }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
       matrix:
         os: [ubuntu-latest, macOS-latest, windows-latest]
-        ghc:
-          - "9.6.3"
-        cabal: ["3.8"]
 
     steps:
       - name: Check out code
@@ -77,8 +74,8 @@ jobs:
         uses: haskell/actions/setup@v2.4.7
         id: setup-haskell-cabal
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: ${{ matrix.cabal }}
+          ghc-version: "latest"
+          cabal-version: "latest"
 
       - name: Freeze
         run: |
@@ -88,7 +85,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
-          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
+          key: ${{ runner.os }}-${{ hashFiles('cabal.project.freeze') }}
 
       - name: Build binary
         run: |
