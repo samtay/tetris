@@ -105,7 +105,8 @@ jobs:
         name: Set binary path name not on Windows
         run: echo "BINARY_PATH=./dist/tetris" >> "$GITHUB_ENV"
 
-      - name: Compress binary
+      - if: matrix.os != 'macOS-latest'
+        name: Compress binary
         uses: svenstaro/upx-action@2.3.0
         with:
           file: ${{ env.BINARY_PATH }}
