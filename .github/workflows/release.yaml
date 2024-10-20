@@ -71,7 +71,7 @@ jobs:
           tagRegexGroup: 1
 
       - name: Setup Haskell
-        uses: haskell/actions/setup@v2.4.7
+        uses: haskell-actions/setup@v2
         id: setup-haskell-cabal
         with:
           ghc-version: "latest"
