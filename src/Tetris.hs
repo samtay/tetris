@@ -175,18 +175,10 @@ initGame lvl = do
     , _board        = mempty
     }
 
--- | Increment level and reset the board
+-- | Increment level
 nextLevel :: (MonadIO m, MonadState Game m) => m ()
 nextLevel = do
-  -- Increment level
   level %= (+ 1)
-  -- Reset board
-  (s1, bag1) <- liftIO $ bagFourTetriminoEach mempty
-  (s2, bag2) <- liftIO $ bagFourTetriminoEach bag1
-  block .= initBlock s1
-  nextShape .= s2
-  nextShapeBag .= bag2
-  board .= mempty
 
 isGameOver :: Game -> Bool
 isGameOver g = blockStopped g && g ^. (block . origin) == startOrigin
