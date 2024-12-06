@@ -9,7 +9,7 @@ import qualified System.Directory as D
 import System.FilePath ((</>))
 
 import Tetris (Game(..))
-import UI.PickLevel (pickLevel)
+import UI.PickLevel (pickLevel, LevelConfig(..))
 import UI.Game (playGame)
 
 data Opts = Opts
@@ -70,11 +70,11 @@ hdOptStr (CustomChars s) = Just s
 
 main :: IO ()
 main = do
-  (Opts hd ml hs) <- execParser fullopts           -- get CLI opts/args
-  when hs (getHighScore >>= printM >> exitSuccess) -- show high score and exit
-  l <- maybe pickLevel return ml                   -- pick level prompt if necessary
-  g <- playGame l (hdOptStr hd)                    -- play game
-  handleEndGame (_score g)                         -- save & print score
+  (Opts hd ml hs) <- execParser fullopts
+  when hs (getHighScore >>= printM >> exitSuccess)
+  levelConfig <- maybe pickLevel (\l -> return $ LevelConfig l False) ml
+  g <- playGame (levelNumber levelConfig) (hdOptStr hd) (progression levelConfig)
+  handleEndGame (_score g)
 
 handleEndGame :: Int -> IO ()
 handleEndGame s = do
