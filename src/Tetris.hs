@@ -162,7 +162,7 @@ bagFourTetriminoEach Empty =
   bagFourTetriminoEach <=< shuffle . Seq.fromList . take 28 $ cycle [I ..]
 
 -- | Initialize a game with a given level
-initGame :: Int -> Bool -> IO Game  -- Updated signature
+initGame :: Int -> Bool -> IO Game 
 initGame lvl prog = do
   (s1, bag1) <- bagFourTetriminoEach mempty
   (s2, bag2) <- bagFourTetriminoEach bag1
@@ -174,7 +174,7 @@ initGame lvl prog = do
     , _score        = 0
     , _linesCleared = 0
     , _board        = mempty
-    , _progression  = prog  -- Added prog parameter
+    , _progression  = prog  
     }
 
 -- | Increment level
