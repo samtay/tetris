@@ -71,10 +71,10 @@ hdOptStr (CustomChars s) = Just s
 main :: IO ()
 main = do
   (Opts hd ml hs) <- execParser fullopts
-  when hs (getHighScore >>= printM >> exitSuccess)
-  levelConfig <- maybe pickLevel (\l -> return $ LevelConfig l False) ml
-  g <- playGame (levelNumber levelConfig) (hdOptStr hd) (progression levelConfig)
-  handleEndGame (_score g)
+  when hs (getHighScore >>= printM >> exitSuccess)                                  -- show high score and exit
+  levelConfig <- maybe pickLevel (\l -> return $ LevelConfig l False) ml            -- pick level prompt if necessary
+  g <- playGame (levelNumber levelConfig) (hdOptStr hd) (progression levelConfig)   -- play game
+  handleEndGame (_score g)                                                          -- save & print score
 
 handleEndGame :: Int -> IO ()
 handleEndGame s = do
