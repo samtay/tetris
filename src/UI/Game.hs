@@ -61,17 +61,18 @@ app = App
   , appAttrMap      = const theMap
   }
 
-playGame :: Int          -- ^ Starting level
-          -> Maybe String  -- ^ Preview cell (Nothing == no preview)
-          -> Bool         -- ^ Enable level progression
-          -> IO Game
-playGame lvl mp prog = do
+playGame
+  :: Int          -- ^ Starting level
+  -> Bool         -- ^ Enable level progression
+  -> Maybe String -- ^ Preview cell (Nothing == no preview)
+  -> IO Game
+playGame lvl prog mp = do
   chan <- newBChan 10   -- share the current level with the thread so it can adjust speed
   tv <- newTVarIO lvl
   void . forkIO $ forever $ do
     writeBChan chan Tick
-    lvl <- readTVarIO tv
-    threadDelay $ levelToDelay lvl
+    lvl' <- readTVarIO tv
+    threadDelay $ levelToDelay lvl'
   initialGame <- initGame lvl prog  -- Pass the progression parameter
   let buildVty = Graphics.Vty.CrossPlatform.mkVty Graphics.Vty.Config.defaultConfig
   initialVty <- buildVty
@@ -94,6 +95,7 @@ handleEvent :: BrickEvent Name Tick -> EventM Name UI ()
 handleEvent (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart
 handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
 handleEvent (VtyEvent (V.EvKey V.KEsc        [])) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'm') [])) = exec toggleProgression
 handleEvent (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right)
 handleEvent (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left)
 handleEvent (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down)
@@ -133,6 +135,9 @@ restart = do
   g <- liftIO $ initGame lvl prog   -- Use it when restarting
   assign game g
   assign locked False
+
+toggleProgression :: Tetris ()
+toggleProgression = modifying progression not
 
 -- Drawing
 
@@ -219,12 +224,11 @@ drawStats g =
         ]
 
 drawProgression :: Bool -> Widget Name
-drawProgression True =
-    padLeftRight 1 $ str "Level Mode: " <+>
-    withAttr progressionAttr (padLeft Max $ str "ON")
-drawProgression False =
-    padLeftRight 1 $ str "Level Mode: " <+>
-    withAttr fixedAttr (padLeft Max $ str "Fixed")
+drawProgression enabled =
+  let attr = if enabled then progressionAttr else fixedAttr
+      text = if enabled then "On" else "Off"
+  in padLeftRight 1 $ str "Leveling "
+      <+> withAttr attr (padLeft Max $ str text)
 
 drawStat :: String -> Int -> Widget Name
 drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
@@ -268,6 +272,7 @@ drawHelp =
       , ("Down"   , "j, ↓")
       , ("Rotate" , "k, ↑")
       , ("Drop"   , "space")
+      , ("Mode"   , "m")
       , ("Restart", "r")
       , ("Pause"  , "p")
       , ("Quit"   , "q")

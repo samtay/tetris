@@ -1,21 +1,26 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 module Main where
 
 import Control.Monad (when)
 import System.Exit (exitSuccess)
 import Text.Read (readMaybe)
+import Data.Char (toLower)
+import Data.Functor.Identity
 
 import Options.Applicative
 import qualified System.Directory as D
 import System.FilePath ((</>))
 
 import Tetris (Game(..))
-import UI.PickLevel (pickLevel, LevelConfig(..))
+import UI.PickLevel (configureLeveling, LevelConfig'(..))
 import UI.Game (playGame)
 
 data Opts = Opts
   { hardDrop :: HardDropOpt
-  , level    :: Maybe Int
-  , score    :: Bool
+  , level :: Maybe Int
+  , progression :: Maybe Bool
+  , score :: Bool
   }
 
 data HardDropOpt = None | AsciiOnly | CustomChars String
@@ -28,9 +33,21 @@ opts = Opts
     <> short 'l'
     <> metavar "LEVEL"
     <> help "Specify level (unspecified results in prompt)" ))
+  <*> optional (option toggle
+    (  long "progression"
+    <> metavar "BOOL"
+    <> help "Turn level progression ON/OFF (unspecified results in prompt)" ))
   <*> switch
     (  long "high-score"
     <> help "Print high score and exit" )
+
+toggle :: ReadM Bool
+toggle = do
+  s <- str
+  case toLower <$> s of
+    y | y `elem` ["y", "yes", "on", "t", "true"] -> return True
+    n | n `elem` ["n", "no", "off", "f", "false"] -> return False
+    _   -> readerError "Must be 'Y' or 'N'"
 
 hardDropOpt :: Parser HardDropOpt
 hardDropOpt = noneOpt <|> asciiOpt <|> custOpt
@@ -70,11 +87,18 @@ hdOptStr (CustomChars s) = Just s
 
 main :: IO ()
 main = do
-  (Opts hd ml hs) <- execParser fullopts
-  when hs (getHighScore >>= printM >> exitSuccess)                                  -- show high score and exit
-  levelConfig <- maybe pickLevel (\l -> return $ LevelConfig l False) ml            -- pick level prompt if necessary
-  g <- playGame (levelNumber levelConfig) (hdOptStr hd) (progression levelConfig)   -- play game
-  handleEndGame (_score g)                                                          -- save & print score
+  (Opts {..}) <- execParser fullopts
+  -- show high score and exit
+  when score (getHighScore >>= printM >> exitSuccess)
+  -- pick level prompt if necessary
+  levelConfig <- configureLeveling level progression
+  -- play game
+  g <- playGame
+    (runIdentity levelConfig.level)
+    (runIdentity levelConfig.progression)
+    (hdOptStr hardDrop)
+  -- save & print score
+  handleEndGame (_score g)
 
 handleEndGame :: Int -> IO ()
 handleEndGame s = do

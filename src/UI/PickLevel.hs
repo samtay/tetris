@@ -1,10 +1,16 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module UI.PickLevel
-  ( pickLevel
-  , LevelConfig(..)
+  ( configureLeveling
+  , LevelConfig'(..)
   ) where
 
-import System.Exit (exitSuccess)
-import Control.Monad (when)
+import System.Exit
+import Control.Monad
+import Control.Monad.Extra
+import Data.Functor.Identity
+import Data.Maybe
 
 import Brick
 import qualified Brick.Widgets.Border as B
@@ -12,21 +18,15 @@ import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import qualified Graphics.Vty as V
 
-data LevelConfig = LevelConfig
-  { levelNumber :: Int
-  , progression :: Bool
-  } deriving (Show, Eq)
+type LevelConfig = LevelConfig' Identity
+type LevelConfigMaybe = LevelConfig' Maybe
 
-data MenuOption = YesOption | NoOption deriving (Eq)
-
-data PickState = PickState
-  { currentLevel :: Maybe Int
-  , showProgression :: Bool
-  , pickingLevel :: Bool
-  , selectedOption :: MenuOption
+data LevelConfig' t = LevelConfig
+  { level :: t Int
+  , progression :: t Bool
   }
 
-app :: App PickState e ()
+app :: App LevelConfigMaybe e ()
 app = App
   { appDraw         = drawUI
   , appHandleEvent  = handleEvent
@@ -40,10 +40,10 @@ app = App
 selectedAttr :: AttrName
 selectedAttr = attrName "selected"
 
-drawUI :: PickState -> [Widget ()]
+drawUI :: LevelConfigMaybe -> [Widget ()]
 drawUI ps = [ui ps]
 
-ui :: PickState -> Widget ()
+ui :: LevelConfigMaybe -> Widget ()
 ui ps =
   padLeft (Pad 19)
     $ padRight (Pad 21)
@@ -53,69 +53,49 @@ ui ps =
     $ withBorderStyle BS.unicodeBold
     $ B.borderWithLabel (str "Tetris")
     $ C.center
-    $ vBox
-    [ if pickingLevel ps
+    $ if (isNothing ps.level)
         then str "Choose Level (0-9)"
         else vBox
-          [ str "Level Progression?"
-          , str ""
-          , C.hCenter $ drawOption "YES" YesOption (selectedOption ps)
-          , C.hCenter $ drawOption "NO" NoOption (selectedOption ps)
-          , str ""
-          , C.hCenter $ str "Use ↑↓ or j/k"
-          , C.hCenter $ str "to Select."
-          , str ""
-          , C.hCenter $ str "Press Enter"
-          , C.hCenter $ str "to Continue."
-          ]
-    ]
+        [ C.hCenter $ str "Level Progression?"
+        , C.hCenter $ str "([Y]/N)"
+        ]
 
-drawOption :: String -> MenuOption -> MenuOption -> Widget ()
-drawOption label opt current =
-  withAttr (if opt == current then selectedAttr else attrName "")
-    $ str $ "  " ++ label ++ "  "
-
-handleEvent :: BrickEvent () e -> EventM () PickState ()
+handleEvent :: BrickEvent () e -> EventM () LevelConfigMaybe ()
 handleEvent (VtyEvent (V.EvKey V.KEsc        _)) = halt
 handleEvent (VtyEvent (V.EvKey (V.KChar 'q') _)) = halt
 handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Y') _)) = pickProgression True
+handleEvent (VtyEvent (V.EvKey (V.KChar 'y') _)) = pickProgression True
+handleEvent (VtyEvent (V.EvKey (V.KChar 'N') _)) = pickProgression False
+handleEvent (VtyEvent (V.EvKey (V.KChar 'n') _)) = pickProgression False
+handleEvent (VtyEvent (V.EvKey (V.KChar ' ') _)) = pickProgression True
+handleEvent (VtyEvent (V.EvKey V.KEnter []))     = pickProgression True
 handleEvent (VtyEvent (V.EvKey (V.KChar d) [])) =
-  whenPickingLevel $ when (d `elem` ['0' .. '9']) $ do
-    modify $ \s -> s { currentLevel = Just $ read [d], pickingLevel = False }
-handleEvent (VtyEvent (V.EvKey V.KEnter [])) = do
-  s <- get
-  when (not $ pickingLevel s) $ do
-    case currentLevel s of
-      Just l -> do
-        put $ PickState (Just l) (selectedOption s == YesOption) True YesOption
-        halt
-      Nothing -> pure ()
-handleEvent (VtyEvent (V.EvKey V.KUp [])) =
-  whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
-handleEvent (VtyEvent (V.EvKey V.KDown [])) =
-  whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
-handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) =
-  whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
-handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) =
-  whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
+  when (d `elem` ['0' .. '9']) $ pickLevel $ read [d]
 handleEvent _ = pure ()
 
-whenPickingLevel :: EventM () PickState () -> EventM () PickState ()
-whenPickingLevel action = do
-  picking <- gets pickingLevel
-  when picking action
+pickLevel :: Int -> EventM () LevelConfigMaybe ()
+pickLevel n = do
+  whenM pickingLevel $ do
+    modify $ \s -> s { level = Just n }
+    whenM (gets (isJust . progression)) $ do
+      halt
 
-whenNotPickingLevel :: EventM () PickState () -> EventM () PickState ()
-whenNotPickingLevel action = do
-  picking <- gets pickingLevel
-  when (not picking) action
+pickProgression :: Bool -> EventM () LevelConfigMaybe ()
+pickProgression b = do
+  unlessM pickingLevel $ do
+    modify $ \s -> s { progression = Just b }
+    halt
 
-initialState :: PickState
-initialState = PickState Nothing True True YesOption
+pickingLevel :: EventM () LevelConfigMaybe Bool
+pickingLevel = gets (isNothing . level)
 
-pickLevel :: IO LevelConfig
-pickLevel = do
-  result <- defaultMain app initialState
-  case currentLevel result of
-    Nothing -> exitSuccess
-    Just l -> return $ LevelConfig l (showProgression result)
+configureLeveling :: Maybe Int -> Maybe Bool -> IO LevelConfig
+configureLeveling (Just l) (Just p) = pure $ LevelConfig (Identity l) (Identity p)
+configureLeveling ml mp = do
+  result <- defaultMain app $ LevelConfig ml mp
+  case result of
+    (LevelConfig {level = Just l, progression = Just p}) ->
+      pure $ LevelConfig (Identity l) (Identity p)
+    _ ->
+      exitSuccess

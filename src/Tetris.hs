@@ -30,12 +30,13 @@ module Tetris
   , boardHeight, boardWidth, relCells
   ) where
 
-import Prelude hiding (Left, Right)
+import Prelude hiding (Left, Right, lines)
 import Control.Applicative ((<|>))
 import Control.Monad (forM_, mfilter, when, (<=<))
+import Control.Monad.Extra (whenM, andM)
 
 import Control.Monad.IO.Class (MonadIO(..), liftIO)
-import Control.Monad.State.Class (MonadState, gets, put)
+import Control.Monad.State.Class (MonadState, gets)
 import Control.Monad.Trans.State (evalStateT)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -193,11 +194,7 @@ timeStep = do
     True -> do
       freezeBlock
       clearFullRows >>= updateScore
-      prog <- use progression
-      when prog $ do
-        levelFinished >>= \case
-          True -> nextLevel
-          False -> pure ()
+      whenM (andM [use progression, levelFinished]) nextLevel
       nextBlock
 
 -- | Gravitate current block, i.e. shift down
@@ -240,13 +237,9 @@ updateScore lines = do
 -- | Using the fixed-goal system described here: https://tetris.wiki/Marathon
 levelFinished :: (MonadState Game m, MonadIO m) => m Bool
 levelFinished = do
-  prog <- use progression
-  if not prog
-    then pure False
-    else do
-      lvl <- use level
-      lc <- use linesCleared
-      pure $ lvl < 15 && lc >= 10 * (lvl + 1)
+  lvl <- use level
+  lc <- use linesCleared
+  pure $ lvl < 15 && lc >= 10 * (lvl + 1)
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
