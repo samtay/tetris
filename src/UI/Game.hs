@@ -63,7 +63,7 @@ app = App
 
 playGame :: Int -> Maybe String -> Bool -> IO Game -- ^ Starting level -- ^ Preview cell (Nothing == no preview)
 playGame lvl mp prog = do
-  chan <- newBChan 10
+  chan <- newBChan 10   -- share the current level with the thread so it can adjust speed
   tv <- newTVarIO lvl
   void . forkIO $ forever $ do
     writeBChan chan Tick
