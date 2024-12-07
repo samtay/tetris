@@ -59,11 +59,14 @@ ui ps =
         else vBox
           [ str "Level Progression?"
           , str ""
-          , drawOption "YES" YesOption (selectedOption ps)
-          , drawOption "NO" NoOption (selectedOption ps)
+          , C.hCenter $ drawOption "YES" YesOption (selectedOption ps)
+          , C.hCenter $ drawOption "NO" NoOption (selectedOption ps)
           , str ""
-          , str "Use ↑↓ to select"
-          , str "Press Enter to continue"
+          , C.hCenter $ str "Use ↑↓ or j/k"
+          , C.hCenter $ str "to Select."
+          , str ""
+          , C.hCenter $ str "Press Enter"
+          , C.hCenter $ str "to Continue."
           ]
     ]
 
@@ -90,6 +93,10 @@ handleEvent (VtyEvent (V.EvKey V.KEnter [])) = do
 handleEvent (VtyEvent (V.EvKey V.KUp [])) =
   whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
 handleEvent (VtyEvent (V.EvKey V.KDown [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
+handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
+handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) =
   whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
 handleEvent _ = pure ()
 
