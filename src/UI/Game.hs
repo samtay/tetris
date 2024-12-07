@@ -1,344 +1,121 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
-module UI.Game
-  ( playGame
+module UI.PickLevel
+  ( pickLevel
+  , LevelConfig(..)
   ) where
 
-import Control.Concurrent (threadDelay, forkIO)
-import Control.Concurrent.STM (TVar, newTVarIO, readTVarIO, writeTVar, atomically)
-import Control.Monad (void, forever)
-import Prelude hiding (Left, Right)
+import System.Exit (exitSuccess)
+import Control.Monad (when)
 
-import Brick hiding (Down)
-import Brick.BChan
+import Brick
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
-import Control.Lens hiding (preview, op, zoom)
-import Control.Monad.Extra (orM, unlessM)
-import Control.Monad.IO.Class (liftIO)
 import qualified Graphics.Vty as V
-import qualified Graphics.Vty.CrossPlatform
-import qualified Graphics.Vty.Config
-import Data.Map (Map)
-import qualified Data.Map as M
-import Linear.V2 (V2(..))
 
-import Tetris
+data LevelConfig = LevelConfig
+  { levelNumber :: Int
+  , progression :: Bool
+  } deriving (Show, Eq)
 
-data UI = UI
-  { _game      :: Game         -- ^ tetris game
-  , _initLevel :: Int          -- ^ initial level chosen
-  , _currLevel :: TVar Int     -- ^ current level
-  , _preview   :: Maybe String -- ^ hard drop preview cell
-  , _locked    :: Bool         -- ^ lock after hard drop before time step
-  , _paused    :: Bool         -- ^ game paused
+data MenuOption = YesOption | NoOption deriving (Eq)
+
+data PickState = PickState
+  { currentLevel :: Maybe Int
+  , showProgression :: Bool
+  , pickingLevel :: Bool
+  , selectedOption :: MenuOption
   }
 
-makeLenses ''UI
-
--- | Ticks mark passing of time
-data Tick = Tick
-
--- | Named resources
-type Name = ()
-
-data VisualBlock
-  = NormalBlock
-  | HardDropBlock String
-
--- App definition and execution
-
-app :: App UI Tick Name
+app :: App PickState e ()
 app = App
   { appDraw         = drawUI
-  , appChooseCursor = neverShowCursor
   , appHandleEvent  = handleEvent
   , appStartEvent   = pure ()
-  , appAttrMap      = const theMap
+  , appAttrMap      = const $ attrMap V.defAttr
+      [ (selectedAttr, V.black `on` V.white)
+      ]
+  , appChooseCursor = neverShowCursor
   }
 
-playGame :: Int -> Maybe String -> Bool -> IO Game
-playGame lvl mp prog = do
-  chan <- newBChan 10
-  tv <- newTVarIO lvl
-  void . forkIO $ forever $ do
-    writeBChan chan Tick
-    lvl <- readTVarIO tv
-    threadDelay $ levelToDelay lvl
-  initialGame <- initGame lvl prog  -- Initialize game with progression mode flag
-  let buildVty = Graphics.Vty.CrossPlatform.mkVty Graphics.Vty.Config.defaultConfig
-  initialVty <- buildVty
-  ui <- customMain initialVty buildVty (Just chan) app $ UI
-    { _game      = initialGame
-    , _initLevel = lvl
-    , _currLevel = tv
-    , _preview   = mp
-    , _locked    = False
-    , _paused    = False
-    }
-  return $ ui ^. game
+selectedAttr :: AttrName
+selectedAttr = attrName "selected"
 
--- | Convert level to delay in microseconds. Higher levels = faster speed.
--- In progression mode this automatically increases difficulty.
-levelToDelay :: Int -> Int
-levelToDelay n = floor $ 400000 * (0.85 :: Double) ^ (2 * n)
+drawUI :: PickState -> [Widget ()]
+drawUI ps = [ui ps]
 
--- Handling events
-
-handleEvent :: BrickEvent Name Tick -> EventM Name UI ()
-handleEvent (VtyEvent (V.EvKey (V.KChar 'r') [])) = restart
-handleEvent (VtyEvent (V.EvKey (V.KChar 'q') [])) = halt
-handleEvent (VtyEvent (V.EvKey V.KEsc        [])) = halt
-handleEvent (VtyEvent (V.EvKey V.KRight      [])) = exec (shift Right)
-handleEvent (VtyEvent (V.EvKey V.KLeft       [])) = exec (shift Left)
-handleEvent (VtyEvent (V.EvKey V.KDown       [])) = exec (shift Down)
-handleEvent (VtyEvent (V.EvKey (V.KChar 'l') [])) = exec (shift Right)
-handleEvent (VtyEvent (V.EvKey (V.KChar 'h') [])) = exec (shift Left)
-handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) = exec (shift Down)
-handleEvent (VtyEvent (V.EvKey V.KUp         [])) = exec rotate
-handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) = exec rotate
-handleEvent (VtyEvent (V.EvKey (V.KChar ' ') [])) =
-  unlessM (orM [use paused, use (game . to isGameOver)]) $ do
-    zoom game hardDrop
-    assign locked True
-handleEvent (VtyEvent (V.EvKey (V.KChar 'p') [])) =
-  unlessM (orM [use locked, use (game . to isGameOver)]) $ do
-    modifying paused not
-handleEvent (AppEvent Tick                      ) =
-  unlessM (orM [use paused, use (game . to isGameOver)]) $ do
-    zoom game timeStep
-    -- Keep level in sync with ticker (gross)
-    lvl <- use $ game . level
-    tv <- use $ currLevel
-    liftIO . atomically $ writeTVar tv lvl
-    assign locked False
-handleEvent _ = pure ()
-
--- | This common execution function is used for all game user input except hard
--- drop and pause. If paused or locked (from hard drop) do nothing, else
--- execute the state computation.
-exec :: Tetris () -> EventM Name UI ()
-exec = unlessM (orM [use paused, use locked, use (game . to isGameOver)]) . zoom game
-
--- | Restart game at the initially chosen level, maintaining progression setting
-restart :: EventM Name UI ()
-restart = do
-  lvl <- use initLevel
-  prog <- use (game . progression)  -- Get current progression setting
-  g <- liftIO $ initGame lvl prog   -- Use it when restarting
-  assign game g
-  assign locked False
-
--- Drawing
-
-drawUI :: UI -> [Widget Name]
-drawUI ui =
-  [ C.vCenter $ vLimit 22 $ hBox
-      [ padLeft Max $ padRight (Pad 2) $ drawStats (ui ^. game)
-      , drawGrid ui
-      , padRight Max $ padLeft (Pad 2) $ drawInfo (ui ^. game)
-      ]
-  ]
-
-drawGrid :: UI -> Widget Name
-drawGrid ui =
-  hLimit 22
+ui :: PickState -> Widget ()
+ui ps =
+  padLeft (Pad 19)
+    $ padRight (Pad 21)
+    $ C.center
+    $ vLimit 22
+    $ hLimit 22
     $ withBorderStyle BS.unicodeBold
     $ B.borderWithLabel (str "Tetris")
-    $ case ui ^. paused of
-        True  -> C.center $ str "Paused"
-        False -> vBox $ [boardHeight, boardHeight - 1 .. 1] <&> \r ->
-          foldr (<+>) emptyWidget
-            . M.filterWithKey (\(V2 _ y) _ -> r == y)
-            $ mconcat
-                [ drawBlockCell NormalBlock <$> ui ^. (game . board)
-                , blockMap NormalBlock (ui ^. (game . block))
-                , case ui ^. preview of
-                    Nothing -> M.empty
-                    Just s  -> blockMap (HardDropBlock s) (evalTetris hardDroppedBlock (ui ^. game))
-                , emptyCellMap
-                ]
- where
-  blockMap v b =
-    M.fromList $ [ (c, drawBlockCell v (b ^. shape)) | c <- coords b ]
-
-emptyCellMap :: Map Coord (Widget Name)
-emptyCellMap = M.fromList
-  [ (V2 x y, emptyGridCellW) | x <- [1 .. boardWidth], y <- [1 .. boardHeight] ]
-
-emptyGridCellW :: Widget Name
-emptyGridCellW = withAttr emptyAttr cw
-
-emptyNextShapeCellW :: Widget Name
-emptyNextShapeCellW = withAttr emptyAttr ecw
-
-drawBlockCell :: VisualBlock -> Tetrimino -> Widget Name
-drawBlockCell NormalBlock       t = withAttr (tToAttr t) cw
-drawBlockCell (HardDropBlock s) t = withAttr (tToAttrH t) (str s)
-
-tToAttr :: Tetrimino -> AttrName
-tToAttr I = iAttr
-tToAttr O = oAttr
-tToAttr T = tAttr
-tToAttr S = sAttr
-tToAttr Z = zAttr
-tToAttr J = jAttr
-tToAttr L = lAttr
-
-tToAttrH :: Tetrimino -> AttrName
-tToAttrH I = ihAttr
-tToAttrH O = ohAttr
-tToAttrH T = thAttr
-tToAttrH S = shAttr
-tToAttrH Z = zhAttr
-tToAttrH J = jhAttr
-tToAttrH L = lhAttr
-
-cw :: Widget Name
-cw = str " ."
-
-ecw :: Widget Name
-ecw = str "  "
-
-drawStats :: Game -> Widget Name
-drawStats g =
-  hLimit 22
-    $ withBorderStyle BS.unicodeBold
-    $ B.borderWithLabel (str "Stats")
+    $ C.center
     $ vBox
-        [ drawStat "Score" $ g ^. score
-        , padTop (Pad 1) $ drawStat "Lines" $ g ^. linesCleared
-        , padTop (Pad 1) $ drawStat "Level" $ g ^. level
-        , padTop (Pad 1) $ drawProgression (g ^. progression) -- Show if level progression is enabled
-        , drawLeaderBoard g
-        ]
-
--- | Displays current progression mode setting (ON: automatic level ups, OFF: fixed level)
-drawProgression :: Bool -> Widget Name
-drawProgression True =
-    padLeftRight 1 $ str "Level Mode" <+>
-    withAttr progressionAttr (padLeft Max $ str "ON")
-drawProgression False =
-    padLeftRight 1 $ str "Level Mode" <+>
-    withAttr fixedAttr (padLeft Max $ str "Fixed")
-
-drawStat :: String -> Int -> Widget Name
-drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
-
-drawLeaderBoard :: Game -> Widget Name
-drawLeaderBoard _ = emptyWidget
-
-drawInfo :: Game -> Widget Name
-drawInfo g = hLimit 18 -- size of next piece box
-  $ vBox
-    [ drawNextShape (g ^. nextShape)
-    , padTop (Pad 1) drawHelp
-    , padTop (Pad 1) (drawGameOver g)
+    [ if pickingLevel ps
+        then str "Choose Level (0-9)"
+        else vBox
+          [ str "Level Progression?"
+          , str ""
+          , C.hCenter $ drawOption "YES" YesOption (selectedOption ps)
+          , C.hCenter $ drawOption "NO" NoOption (selectedOption ps)
+          , str ""
+          , C.hCenter $ str "Use ↑↓ or j/k"
+          , C.hCenter $ str "to Select."
+          , str ""
+          , C.hCenter $ str "Press Enter"
+          , C.hCenter $ str "to Continue."
+          ]
     ]
 
-drawNextShape :: Tetrimino -> Widget Name
-drawNextShape t =
-  withBorderStyle BS.unicodeBold
-    $ B.borderWithLabel (str "Next")
-    $ padTopBottom 1
-    $ padLeftRight 4
-    $ vLimit 4
-    $ vBox
-    $ [0, -1] <&> \y ->
-      hBox [ if V2 x y `elem` coords blk
-             then drawBlockCell NormalBlock t
-             else emptyNextShapeCellW
-           | x <- [-2 .. 1]
-           ]
-  where blk = Block t (V2 0 0) (relCells t)
+drawOption :: String -> MenuOption -> MenuOption -> Widget ()
+drawOption label opt current =
+  withAttr (if opt == current then selectedAttr else attrName "")
+    $ str $ "  " ++ label ++ "  "
 
-drawHelp :: Widget Name
-drawHelp =
-  withBorderStyle BS.unicodeBold
-    $ B.borderWithLabel (str "Help")
-    $ padTopBottom 1
-    $ vBox
-    $ map (uncurry drawKeyInfo)
-      [ ("Left"   , "h, ←")
-      , ("Right"  , "l, →")
-      , ("Down"   , "j, ↓")
-      , ("Rotate" , "k, ↑")
-      , ("Drop"   , "space")
-      , ("Restart", "r")
-      , ("Pause"  , "p")
-      , ("Quit"   , "q")
-      ]
+handleEvent :: BrickEvent () e -> EventM () PickState ()
+handleEvent (VtyEvent (V.EvKey V.KEsc        _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'q') _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar 'Q') _)) = halt
+handleEvent (VtyEvent (V.EvKey (V.KChar d) [])) =
+  whenPickingLevel $ when (d `elem` ['0' .. '9']) $ do
+    modify $ \s -> s { currentLevel = Just $ read [d], pickingLevel = False }
+handleEvent (VtyEvent (V.EvKey V.KEnter [])) = do
+  s <- get
+  when (not $ pickingLevel s) $ do
+    case currentLevel s of
+      Just l -> do
+        put $ PickState (Just l) (selectedOption s == YesOption) True YesOption
+        halt
+      Nothing -> pure ()
+handleEvent (VtyEvent (V.EvKey V.KUp [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
+handleEvent (VtyEvent (V.EvKey V.KDown [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
+handleEvent (VtyEvent (V.EvKey (V.KChar 'j') [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = YesOption }
+handleEvent (VtyEvent (V.EvKey (V.KChar 'k') [])) =
+  whenNotPickingLevel $ modify $ \s -> s { selectedOption = NoOption }
+handleEvent _ = pure ()
 
-drawKeyInfo :: String -> String -> Widget Name
-drawKeyInfo action keys =
-  padRight Max (padLeft (Pad 1) $ str action)
-    <+> padLeft Max (padRight (Pad 1) $ str keys)
+whenPickingLevel :: EventM () PickState () -> EventM () PickState ()
+whenPickingLevel action = do
+  picking <- gets pickingLevel
+  when picking action
 
-drawGameOver :: Game -> Widget Name
-drawGameOver g =
-  if isGameOver g
-  then padLeftRight 4 $ withAttr gameOverAttr $ str "GAME OVER"
-  else emptyWidget
+whenNotPickingLevel :: EventM () PickState () -> EventM () PickState ()
+whenNotPickingLevel action = do
+  picking <- gets pickingLevel
+  when (not picking) action
 
-theMap :: AttrMap
-theMap = attrMap
-  V.defAttr
-  [ (iAttr          , tToColor I `on` tToColor I)
-  , (oAttr          , tToColor O `on` tToColor O)
-  , (tAttr          , tToColor T `on` tToColor T)
-  , (sAttr          , tToColor S `on` tToColor S)
-  , (zAttr          , tToColor Z `on` tToColor Z)
-  , (jAttr          , tToColor J `on` tToColor J)
-  , (lAttr          , tToColor L `on` tToColor L)
-  , (ihAttr         , fg $ tToColor I)
-  , (ohAttr         , fg $ tToColor O)
-  , (thAttr         , fg $ tToColor T)
-  , (shAttr         , fg $ tToColor S)
-  , (zhAttr         , fg $ tToColor Z)
-  , (jhAttr         , fg $ tToColor J)
-  , (lhAttr         , fg $ tToColor L)
-  , (gameOverAttr   , fg V.red `V.withStyle` V.bold)
-  , (progressionAttr, fg V.green `V.withStyle` V.bold)
-  , (fixedAttr      , fg V.blue `V.withStyle` V.bold)
-  ]
+initialState :: PickState
+initialState = PickState Nothing True True YesOption
 
-tToColor :: Tetrimino -> V.Color
-tToColor I = V.cyan
-tToColor O = V.yellow
-tToColor T = V.magenta
-tToColor S = V.green
-tToColor Z = V.red
-tToColor J = V.blue
-tToColor L = V.white
-
-iAttr, oAttr, tAttr, sAttr, zAttr, jAttr, lAttr :: AttrName
-iAttr = attrName "I"
-oAttr = attrName "O"
-tAttr = attrName "T"
-sAttr = attrName "S"
-zAttr = attrName "Z"
-jAttr = attrName "J"
-lAttr = attrName "L"
-
-ihAttr, ohAttr, thAttr, shAttr, zhAttr, jhAttr, lhAttr :: AttrName
-ihAttr = attrName "Ih"
-ohAttr = attrName "Oh"
-thAttr = attrName "Th"
-shAttr = attrName "Sh"
-zhAttr = attrName "Zh"
-jhAttr = attrName "Jh"
-lhAttr = attrName "Lh"
-
-emptyAttr :: AttrName
-emptyAttr = attrName "empty"
-
-gameOverAttr :: AttrName
-gameOverAttr = attrName "gameOver"
-
-progressionAttr, fixedAttr :: AttrName
-progressionAttr = attrName "progression"
-fixedAttr = attrName "fixed"
+pickLevel :: IO LevelConfig
+pickLevel = do
+  result <- defaultMain app initialState
+  case currentLevel result of
+    Nothing -> exitSuccess
+    Just l -> return $ LevelConfig l (showProgression result)
