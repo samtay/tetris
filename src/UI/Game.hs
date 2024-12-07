@@ -221,10 +221,10 @@ drawStats g =
 drawProgression :: Bool -> Widget Name
 drawProgression True =
     padLeftRight 1 $ str "Level Mode: " <+>
-    withAttr progressionAttr (str "ON")
+    withAttr progressionAttr (padLeft Max $ str "ON")
 drawProgression False =
     padLeftRight 1 $ str "Level Mode: " <+>
-    withAttr fixedAttr (str "OFF")
+    withAttr fixedAttr (padLeft Max $ str "Fixed")
 
 drawStat :: String -> Int -> Widget Name
 drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
