@@ -61,7 +61,10 @@ app = App
   , appAttrMap      = const theMap
   }
 
-playGame :: Int -> Maybe String -> Bool -> IO Game -- ^ Starting level -- ^ Preview cell (Nothing == no preview)
+playGame :: Int          -- ^ Starting level
+          -> Maybe String  -- ^ Preview cell (Nothing == no preview)
+          -> Bool         -- ^ Enable level progression
+          -> IO Game
 playGame lvl mp prog = do
   chan <- newBChan 10   -- share the current level with the thread so it can adjust speed
   tv <- newTVarIO lvl
