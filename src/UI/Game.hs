@@ -220,10 +220,10 @@ drawStats g =
 -- | Displays current progression mode setting (ON: automatic level ups, OFF: fixed level)
 drawProgression :: Bool -> Widget Name
 drawProgression True =
-    padLeftRight 1 $ str "Level Mode: " <+>
+    padLeftRight 1 $ str "Level Mode" <+>
     withAttr progressionAttr (padLeft Max $ str "ON")
 drawProgression False =
-    padLeftRight 1 $ str "Level Mode: " <+>
+    padLeftRight 1 $ str "Level Mode" <+>
     withAttr fixedAttr (padLeft Max $ str "Fixed")
 
 drawStat :: String -> Int -> Widget Name
