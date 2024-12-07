@@ -30,12 +30,12 @@ import Linear.V2 (V2(..))
 import Tetris
 
 data UI = UI
-  { _game      :: Game         -- ^ tetris game
-  , _initLevel :: Int          -- ^ initial level chosen
-  , _currLevel :: TVar Int     -- ^ current level
-  , _preview   :: Maybe String -- ^ hard drop preview cell
-  , _locked    :: Bool         -- ^ lock after hard drop before time step
-  , _paused    :: Bool         -- ^ game paused
+  { _game      :: Game
+  , _initLevel :: Int
+  , _currLevel :: TVar Int
+  , _preview   :: Maybe String
+  , _locked    :: Bool
+  , _paused    :: Bool
   }
 
 makeLenses ''UI
@@ -61,28 +61,27 @@ app = App
   , appAttrMap      = const theMap
   }
 
-playGame
-  :: Int -- ^ Starting level
-  -> Maybe String -- ^ Preview cell (Nothing == no preview)
-  -> IO Game
-playGame lvl mp = do
-  chan <- newBChan 10
-  -- share the current level with the thread so it can adjust speed
+playGame :: Int          -- ^ Starting level
+          -> Maybe String  -- ^ Preview cell (Nothing == no preview)
+          -> Bool         -- ^ Enable level progression
+          -> IO Game
+playGame lvl mp prog = do
+  chan <- newBChan 10   -- share the current level with the thread so it can adjust speed
   tv <- newTVarIO lvl
   void . forkIO $ forever $ do
     writeBChan chan Tick
     lvl <- readTVarIO tv
     threadDelay $ levelToDelay lvl
-  initialGame <- initGame lvl
+  initialGame <- initGame lvl prog  -- Pass the progression parameter
   let buildVty = Graphics.Vty.CrossPlatform.mkVty Graphics.Vty.Config.defaultConfig
   initialVty <- buildVty
   ui <- customMain initialVty buildVty (Just chan) app $ UI
-    { _game    = initialGame
+    { _game      = initialGame
     , _initLevel = lvl
     , _currLevel = tv
-    , _preview = mp
-    , _locked  = False
-    , _paused  = False
+    , _preview   = mp
+    , _locked    = False
+    , _paused    = False
     }
   return $ ui ^. game
 
@@ -129,8 +128,9 @@ exec = unlessM (orM [use paused, use locked, use (game . to isGameOver)]) . zoom
 -- | Restart game at the initially chosen level
 restart :: EventM Name UI ()
 restart = do
-  lvl <- use $ initLevel
-  g <- liftIO $ initGame lvl
+  lvl <- use initLevel
+  prog <- use (game . progression)  -- Get current progression setting
+  g <- liftIO $ initGame lvl prog   -- Use it when restarting
   assign game g
   assign locked False
 
@@ -214,8 +214,17 @@ drawStats g =
         [ drawStat "Score" $ g ^. score
         , padTop (Pad 1) $ drawStat "Lines" $ g ^. linesCleared
         , padTop (Pad 1) $ drawStat "Level" $ g ^. level
+        , padTop (Pad 1) $ drawProgression (g ^. progression)
         , drawLeaderBoard g
         ]
+
+drawProgression :: Bool -> Widget Name
+drawProgression True =
+    padLeftRight 1 $ str "Level Mode: " <+>
+    withAttr progressionAttr (padLeft Max $ str "ON")
+drawProgression False =
+    padLeftRight 1 $ str "Level Mode: " <+>
+    withAttr fixedAttr (padLeft Max $ str "Fixed")
 
 drawStat :: String -> Int -> Widget Name
 drawStat s n = padLeftRight 1 $ str s <+> padLeft Max (str $ show n)
@@ -278,21 +287,23 @@ drawGameOver g =
 theMap :: AttrMap
 theMap = attrMap
   V.defAttr
-  [ (iAttr       , tToColor I `on` tToColor I)
-  , (oAttr       , tToColor O `on` tToColor O)
-  , (tAttr       , tToColor T `on` tToColor T)
-  , (sAttr       , tToColor S `on` tToColor S)
-  , (zAttr       , tToColor Z `on` tToColor Z)
-  , (jAttr       , tToColor J `on` tToColor J)
-  , (lAttr       , tToColor L `on` tToColor L)
-  , (ihAttr      , fg $ tToColor I)
-  , (ohAttr      , fg $ tToColor O)
-  , (thAttr      , fg $ tToColor T)
-  , (shAttr      , fg $ tToColor S)
-  , (zhAttr      , fg $ tToColor Z)
-  , (jhAttr      , fg $ tToColor J)
-  , (lhAttr      , fg $ tToColor L)
-  , (gameOverAttr, fg V.red `V.withStyle` V.bold)
+  [ (iAttr          , tToColor I `on` tToColor I)
+  , (oAttr          , tToColor O `on` tToColor O)
+  , (tAttr          , tToColor T `on` tToColor T)
+  , (sAttr          , tToColor S `on` tToColor S)
+  , (zAttr          , tToColor Z `on` tToColor Z)
+  , (jAttr          , tToColor J `on` tToColor J)
+  , (lAttr          , tToColor L `on` tToColor L)
+  , (ihAttr         , fg $ tToColor I)
+  , (ohAttr         , fg $ tToColor O)
+  , (thAttr         , fg $ tToColor T)
+  , (shAttr         , fg $ tToColor S)
+  , (zhAttr         , fg $ tToColor Z)
+  , (jhAttr         , fg $ tToColor J)
+  , (lhAttr         , fg $ tToColor L)
+  , (gameOverAttr   , fg V.red `V.withStyle` V.bold)
+  , (progressionAttr, fg V.green `V.withStyle` V.bold)
+  , (fixedAttr      , fg V.blue `V.withStyle` V.bold)
   ]
 
 tToColor :: Tetrimino -> V.Color
@@ -327,3 +338,7 @@ emptyAttr = attrName "empty"
 
 gameOverAttr :: AttrName
 gameOverAttr = attrName "gameOver"
+
+progressionAttr, fixedAttr :: AttrName
+progressionAttr = attrName "progression"
+fixedAttr = attrName "fixed"

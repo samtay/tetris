@@ -25,7 +25,7 @@ module Tetris
   , Tetrimino(..)
   , Tetris
   -- Lenses
-  , block, board, level, nextShape, score, shape, linesCleared
+  , block, board, level, nextShape, score, shape, linesCleared, progression
   -- Constants
   , boardHeight, boardWidth, relCells
   ) where
@@ -82,6 +82,7 @@ data Game = Game
   , _linesCleared :: Int
   , _score        :: Int
   , _board        :: Board
+  , _progression  :: Bool
   } deriving (Eq)
 makeLenses ''Game
 
@@ -161,8 +162,8 @@ bagFourTetriminoEach Empty =
   bagFourTetriminoEach <=< shuffle . Seq.fromList . take 28 $ cycle [I ..]
 
 -- | Initialize a game with a given level
-initGame :: Int -> IO Game
-initGame lvl = do
+initGame :: Int -> Bool -> IO Game 
+initGame lvl prog = do
   (s1, bag1) <- bagFourTetriminoEach mempty
   (s2, bag2) <- bagFourTetriminoEach bag1
   pure $ Game
@@ -173,6 +174,7 @@ initGame lvl = do
     , _score        = 0
     , _linesCleared = 0
     , _board        = mempty
+    , _progression  = prog  
     }
 
 -- | Increment level
@@ -191,9 +193,12 @@ timeStep = do
     True -> do
       freezeBlock
       clearFullRows >>= updateScore
-      levelFinished >>= \case
-        True -> nextLevel
-        False -> nextBlock
+      prog <- use progression
+      when prog $ do
+        levelFinished >>= \case
+          True -> nextLevel
+          False -> pure ()
+      nextBlock
 
 -- | Gravitate current block, i.e. shift down
 gravitate :: MonadState Game m => m ()
@@ -235,9 +240,13 @@ updateScore lines = do
 -- | Using the fixed-goal system described here: https://tetris.wiki/Marathon
 levelFinished :: (MonadState Game m, MonadIO m) => m Bool
 levelFinished = do
-  lvl <- use level
-  lc <- use linesCleared
-  pure $ lvl < 15 && lc >= 10 * (lvl + 1)
+  prog <- use progression
+  if not prog
+    then pure False
+    else do
+      lvl <- use level
+      lc <- use linesCleared
+      pure $ lvl < 15 && lc >= 10 * (lvl + 1)
 
 -- | Handle counterclockwise block rotation (if possible)
 -- Allows wallkicks: http://tetris.wikia.com/wiki/TGM_rotation
