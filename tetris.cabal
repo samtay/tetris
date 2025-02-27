@@ -1,7 +1,7 @@
 name:                tetris
 version:             0.1.6
 homepage:            https://github.com/samtay/tetris#readme
-license:             BSD3
+license:             MIT
 license-file:        LICENSE
 author:              Sam Tay
 maintainer:          sam.chong.tay@pm.me
